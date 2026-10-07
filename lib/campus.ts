@@ -54,6 +54,18 @@ export function extractStoryMediaPath(mediaUrl: string | null | undefined) {
   return path || null;
 }
 
+export function getStoryErrorMessage(error: { code?: string; message?: string } | null | undefined) {
+  if (!error) return "We couldn't save this story. Please try again.";
+  if (error.code === "23505") return "This story already exists. Please choose the media again.";
+  if (error.code === "42501" || /row-level security|permission denied/i.test(error.message ?? "")) {
+    return "You don't have permission to post this story.";
+  }
+  if (/media_path.*schema cache|column.*media_path/i.test(error.message ?? "")) {
+    return "Story storage is still updating. Refresh the page and try again.";
+  }
+  return error.message || "We couldn't save this story. Please try again.";
+}
+
 export function clamp(value: number, min: number, max: number) {
   return Math.min(Math.max(value, min), max);
 }

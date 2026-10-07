@@ -8,7 +8,7 @@ import { createClient } from "@/lib/supabase/browser";
 import { GlassBar, GlassButton, GlassCard, GlassInput } from "@/components/glass";
 import { CampusMapViewer, type MapFloor, type MapPoi } from "@/components/map/CampusMapViewer";
 import { BottomTabBar } from "@/components/navigation/BottomTabBar";
-import { extractStoryMediaPath, isStoryExpired, rankPoiSearch, type StoryItem } from "@/lib/campus";
+import { extractStoryMediaPath, getStoryErrorMessage, isStoryExpired, rankPoiSearch, type StoryItem } from "@/lib/campus";
 
 const floors: MapFloor[] = [
   { id: "g", code: "G", name: "Ground Floor", sort_order: 0, svg_path: "/maps/floor-G.svg", width: 1600, height: 1000 },
@@ -85,6 +85,7 @@ export function AppShell() {
   const [storyFailures, setStoryFailures] = useState<Record<string, boolean>>({});
   const [composerOpen, setComposerOpen] = useState(false);
   const [caption, setCaption] = useState("");
+  const [storyError, setStoryError] = useState("");
   const [storyDraft, setStoryDraft] = useState<{ url: string; type: "image" | "video" } | null>(null);
   const timerRef = useRef<number | null>(null);
   const refreshAttemptsRef = useRef<Record<string, number>>({});
@@ -143,6 +144,9 @@ export function AppShell() {
   const openStory = (index: number) => {
     if (activeStories[index]) {
       setStoryIndex(index);
+      void supabase.auth.getUser().then(({ data: { user } }) => {
+        if (user) void supabase.from("story_views").upsert({ story_id: activeStories[index].id, viewer_id: user.id }, { onConflict: "story_id,viewer_id" });
+      });
     }
   };
 
@@ -171,35 +175,61 @@ export function AppShell() {
 
   const postStory = async () => {
     if (!storyDraft) return;
+    setStoryError("");
     const { data: { user } } = await supabase.auth.getUser();
-    if (!user) return;
+    if (!user) {
+      setStoryError("Sign in before posting a story.");
+      return;
+    }
     const extension = storyDraft.type === "video" ? "mp4" : "jpg";
     const mediaPath = `${user.id}/${crypto.randomUUID()}.${extension}`;
-    const file = await (await fetch(storyDraft.url)).blob();
+    let file: Blob;
+    try {
+      file = await (await fetch(storyDraft.url)).blob();
+    } catch {
+      setStoryError("We couldn't read that file. Choose it again and retry.");
+      return;
+    }
     const { error: uploadError } = await supabase.storage.from("stories").upload(mediaPath, file, { contentType: file.type, upsert: false });
     if (uploadError) {
-      if (process.env.NODE_ENV === "development") console.warn("Could not upload story media:", uploadError.message);
+      setStoryError(getStoryErrorMessage(uploadError));
       return;
     }
     const { data, error } = await supabase.from("stories").insert({
       author_id: user.id,
       kind: "student",
       media_path: mediaPath,
-      media_url: mediaPath,
+      media_url: null,
       media_type: storyDraft.type,
       caption: caption || null,
     }).select("id,author_id,kind,media_url,media_path,media_type,caption,created_at,expires_at").single();
     if (error || !data) {
-      if (process.env.NODE_ENV === "development") console.warn("Could not save story:", error?.message ?? "No story returned");
+      await supabase.storage.from("stories").remove([mediaPath]);
+      setStoryError(getStoryErrorMessage(error));
       return;
     }
     const [signedStory] = await signStories([{ ...data, author: "You", seen: false, verified: false } as StoryItem]);
     setStories((current) => [signedStory ?? data as StoryItem, ...current]);
     setComposerOpen(false);
+    setStoryError("");
     setCaption("");
     URL.revokeObjectURL(storyDraft.url);
     setStoryDraft(null);
     setStoryIndex(0);
+  };
+
+  const reportCurrentStory = async () => {
+    if (!currentStory) return;
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) return;
+    const { error } = await supabase.from("reports").insert({
+      reporter_id: user.id,
+      target_type: "story",
+      target_id: currentStory.id,
+      reason: "Story reported by viewer",
+    });
+    if (error && process.env.NODE_ENV === "development") console.warn("Could not report story:", error.message);
+    setReportOpen(false);
   };
 
   const handleStoryMediaError = async (story: StoryItem) => {
@@ -383,6 +413,7 @@ export function AppShell() {
                 <button type="button" className="grid h-8 w-8 place-items-center rounded-full bg-white/10" onClick={() => setComposerOpen(false)} aria-label="Close composer"><X className="h-4 w-4" /></button>
               </div>
 
+              {storyError && <p className="mb-3 rounded-xl bg-[var(--color-red)]/10 p-3 text-sm text-[var(--color-red)]" role="alert">{storyError}</p>}
               {!storyDraft ? (
                 <label className="story-picker flex cursor-pointer flex-col items-center justify-center gap-2 rounded-[24px] border border-dashed border-white/30 bg-white/5 p-6 text-center text-sm text-[var(--color-muted)]">
                   <Upload className="h-5 w-5" />
@@ -413,7 +444,7 @@ export function AppShell() {
                 <button type="button" className="grid h-8 w-8 place-items-center rounded-full bg-[var(--color-separator)]" onClick={() => setReportOpen(false)} aria-label="Close report dialog"><X className="h-4 w-4" /></button>
               </div>
               <p className="mt-3 text-sm leading-6 text-[var(--color-muted)]">Choose Report issue from the story menu to send this story for review.</p>
-              <div className="mt-5 flex justify-end gap-2"><GlassButton type="button" onClick={() => setReportOpen(false)}>Cancel</GlassButton><GlassButton type="button" variant="primary" onClick={() => setReportOpen(false)}>Report</GlassButton></div>
+              <div className="mt-5 flex justify-end gap-2"><GlassButton type="button" onClick={() => setReportOpen(false)}>Cancel</GlassButton><GlassButton type="button" variant="primary" onClick={() => void reportCurrentStory()}>Report</GlassButton></div>
             </motion.div>
           </motion.div>
         )}

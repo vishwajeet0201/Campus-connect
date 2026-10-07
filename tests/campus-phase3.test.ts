@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { clamp, extractStoryMediaPath, isStoryExpired, rankPoiSearch, screenToWorld, worldToScreen } from "@/lib/campus";
+import { clamp, extractStoryMediaPath, getStoryErrorMessage, isStoryExpired, rankPoiSearch, screenToWorld, worldToScreen } from "@/lib/campus";
 
 describe("campus coordinate transforms", () => {
   it("keeps values in range when zooming at the viewport center", () => {
@@ -44,6 +44,11 @@ describe("story expiry logic", () => {
       expect(extractStoryMediaPath("https://project.supabase.co/storage/v1/object/public/stories/user-id/story.jpg")).toBe("user-id/story.jpg");
       expect(extractStoryMediaPath("https://project.supabase.co/storage/v1/object/sign/stories/user-id/story.jpg?token=abc")).toBe("user-id/story.jpg");
       expect(extractStoryMediaPath("user-id/story.jpg")).toBe(null);
+    });
+
+    it("maps schema and permission errors to actionable story messages", () => {
+      expect(getStoryErrorMessage({ message: "Could not find the 'media_path' column of 'stories' in the schema cache" })).toContain("Refresh");
+      expect(getStoryErrorMessage({ code: "42501" })).toContain("permission");
     });
   });
 });
