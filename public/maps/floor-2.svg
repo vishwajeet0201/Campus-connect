@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 1000" width="1600" height="1000" role="img" aria-label="Second floor map placeholder">
+  <defs>
+    <style>
+      .bg { fill: #f6f9fe; }
+      .wall { fill: #e2ebf7; stroke: #9eb3d7; stroke-width: 4; }
+      .room { fill: #fbfcff; stroke: #adbad8; stroke-width: 2; }
+      .corridor { fill: #edf3fb; stroke: #c8d6ee; stroke-width: 2; }
+      .label { font: 600 16px 'Segoe UI', sans-serif; fill: #22314d; }
+      .small { font: 500 12px 'Segoe UI', sans-serif; fill: #53657e; }
+    </style>
+  </defs>
+  <rect class="bg" width="1600" height="1000" />
+  <g id="walls">
+    <rect class="wall" x="100" y="90" width="1400" height="840" rx="24" />
+  </g>
+  <g id="rooms">
+    <rect id="room-2-101" class="room" x="190" y="200" width="220" height="180" rx="20" />
+    <rect id="room-2-102" class="room" x="440" y="200" width="220" height="180" rx="20" />
+    <rect id="room-2-103" class="room" x="690" y="200" width="220" height="180" rx="20" />
+    <rect id="room-2-104" class="room" x="940" y="200" width="220" height="180" rx="20" />
+    <rect id="room-innovation" class="room" x="190" y="470" width="220" height="180" rx="20" />
+    <rect id="room-research" class="room" x="440" y="470" width="220" height="180" rx="20" />
+    <rect id="room-boardroom" class="room" x="940" y="470" width="220" height="180" rx="20" />
+    <rect id="room-archives" class="room" x="1180" y="470" width="220" height="180" rx="20" />
+    <rect id="room-campus-office" class="room" x="1110" y="720" width="260" height="150" rx="20" />
+    <rect id="room-2-entrance" class="room" x="180" y="720" width="240" height="150" rx="20" />
+  </g>
+  <g id="corridors">
+    <rect class="corridor" x="400" y="390" width="800" height="90" rx="20" />
+    <rect class="corridor" x="400" y="660" width="880" height="70" rx="20" />
+    <rect class="corridor" x="400" y="390" width="70" height="340" rx="20" />
+    <rect class="corridor" x="1130" y="390" width="70" height="340" rx="20" />
+  </g>
+  <g id="labels">
+    <text class="label" x="260" y="300">201</text>
+    <text class="label" x="510" y="300">202</text>
+    <text class="label" x="760" y="300">203</text>
+    <text class="label" x="1010" y="300">204</text>
+    <text class="label" x="230" y="575">Innovation</text>
+    <text class="label" x="485" y="575">Research</text>
+    <text class="label" x="1005" y="575">Boardroom</text>
+    <text class="label" x="1240" y="575">Archives</text>
+    <text class="label" x="1180" y="802">Office</text>
+    <text class="label" x="250" y="802">Entrance</text>
+    <text class="small" x="720" y="435">Research corridor</text>
+  </g>
+</svg>

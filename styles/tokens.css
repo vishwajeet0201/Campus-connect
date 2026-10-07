@@ -24,7 +24,9 @@
   --color-map-pin-ring-green: rgb(52 199 89 / 16%);
   --gradient-story: linear-gradient(135deg, #feda75 0%, #fa7e1e 25%, #d62976 52%, #962fbf 76%, #4f5bd5 100%);
   --surface-glass: rgb(255 255 255 / 8%);
+  --surface-material: rgb(255 255 255 / 90%);
   --surface-solid: #ffffff;
+  --surface-flat: var(--color-canvas);
   --surface-control: rgb(255 255 255 / 7%);
   --surface-control-hover: rgb(255 255 255 / 16%);
   --surface-primary: #007aff;
@@ -41,7 +43,9 @@
   --shadow-glass: 0 1.25rem 3rem rgb(0 0 0 / 12%), inset 0 1px 0 rgb(255 255 255 / 32%);
   --shadow-control: 0 0.5rem 1.25rem rgb(0 0 0 / 12%), inset 0 1px 0 rgb(255 255 255 / 36%);
   --blur-glass: 26px;
+  --blur-material: 24px;
   --saturation-glass: 170%;
+  --saturation-material: 160%;
   --radius-card: 30px;
   --radius-bar: 24px;
   --radius-sheet: 32px;
@@ -49,6 +53,12 @@
   --motion-quick: 180ms ease;
   --scale-pressed: 0.97;
   --map-grid-size: 34px;
+  --z-map: 0;
+  --z-controls: 10;
+  --z-sheet: 20;
+  --z-tabbar: 30;
+  --z-scrim: 40;
+  --z-modal: 50;
 }
 
 [data-theme="dark"] {
@@ -66,7 +76,9 @@
   --color-map-border-soft: rgb(84 84 88 / 65%);
   --color-map-pin-ring: rgb(10 132 255 / 20%);
   --surface-glass: rgb(255 255 255 / 6%);
+  --surface-material: rgb(28 28 30 / 94%);
   --surface-solid: #1c1c1e;
+  --surface-flat: var(--color-canvas);
   --surface-control: rgb(255 255 255 / 6%);
   --surface-control-hover: rgb(255 255 255 / 13%);
   --surface-primary: #0a84ff;

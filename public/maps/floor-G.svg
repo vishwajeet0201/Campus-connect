@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 1000" width="1600" height="1000" role="img" aria-label="Ground floor map placeholder">
+  <defs>
+    <style>
+      .bg { fill: #f4f7fb; }
+      .wall { fill: #dfe8f4; stroke: #9ab2d1; stroke-width: 4; }
+      .room { fill: #f9fbff; stroke: #adb9d1; stroke-width: 2; }
+      .corridor { fill: #eef3fb; stroke: #c6d5ee; stroke-width: 2; }
+      .label { font: 600 16px 'Segoe UI', sans-serif; fill: #1d2b45; }
+      .small { font: 500 12px 'Segoe UI', sans-serif; fill: #53657e; }
+    </style>
+  </defs>
+  <rect class="bg" width="1600" height="1000" />
+  <g id="walls">
+    <rect class="wall" x="80" y="90" width="1440" height="860" rx="24" />
+  </g>
+  <g id="rooms">
+    <rect id="room-g101" class="room" x="180" y="180" width="220" height="180" rx="20" />
+    <rect id="room-g102" class="room" x="430" y="180" width="220" height="180" rx="20" />
+    <rect id="room-g103" class="room" x="680" y="180" width="220" height="180" rx="20" />
+    <rect id="room-g104" class="room" x="930" y="180" width="220" height="180" rx="20" />
+    <rect id="room-g201" class="room" x="180" y="460" width="220" height="180" rx="20" />
+    <rect id="room-g202" class="room" x="430" y="460" width="220" height="180" rx="20" />
+    <rect id="room-conference" class="room" x="930" y="460" width="220" height="180" rx="20" />
+    <rect id="room-offices" class="room" x="1180" y="460" width="220" height="180" rx="20" />
+    <rect id="room-cafeteria" class="room" x="1060" y="720" width="310" height="150" rx="20" />
+    <rect id="room-lib" class="room" x="760" y="720" width="200" height="150" rx="20" />
+    <rect id="room-entrance" class="room" x="170" y="720" width="240" height="150" rx="20" />
+  </g>
+  <g id="corridors">
+    <rect class="corridor" x="400" y="390" width="800" height="90" rx="20" />
+    <rect class="corridor" x="400" y="660" width="880" height="70" rx="20" />
+    <rect class="corridor" x="400" y="390" width="70" height="340" rx="20" />
+    <rect class="corridor" x="1130" y="390" width="70" height="340" rx="20" />
+  </g>
+  <g id="labels">
+    <text class="label" x="260" y="280">G-101</text>
+    <text class="label" x="510" y="280">G-102</text>
+    <text class="label" x="760" y="280">G-103</text>
+    <text class="label" x="1010" y="280">G-104</text>
+    <text class="label" x="248" y="578">Electronics</text>
+    <text class="label" x="500" y="578">Workshop</text>
+    <text class="label" x="1015" y="578">Conference</text>
+    <text class="label" x="1240" y="578">Office</text>
+    <text class="label" x="1160" y="802">Cafeteria</text>
+    <text class="label" x="810" y="802">Library</text>
+    <text class="label" x="250" y="802">Entrance</text>
+    <text class="small" x="710" y="435">Main corridor</text>
+  </g>
+</svg>

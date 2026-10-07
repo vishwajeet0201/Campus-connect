@@ -1,4 +1,5 @@
 export const ALLOWED_EMAIL_SUFFIXES = ["vjti.ac.in"] as const;
+export const STORIES_BUCKET_NAME = "stories";
 
 const EMAIL_PATTERN = /^[^@\s]+@([^@\s]+)$/;
 

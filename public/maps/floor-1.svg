@@ -1,0 +1,47 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1600 1000" width="1600" height="1000" role="img" aria-label="First floor map placeholder">
+  <defs>
+    <style>
+      .bg { fill: #f5f8fd; }
+      .wall { fill: #e2ebf7; stroke: #9bb0d1; stroke-width: 4; }
+      .room { fill: #fbfcff; stroke: #acbad8; stroke-width: 2; }
+      .corridor { fill: #edf3fb; stroke: #c9d7f0; stroke-width: 2; }
+      .label { font: 600 16px 'Segoe UI', sans-serif; fill: #23314d; }
+      .small { font: 500 12px 'Segoe UI', sans-serif; fill: #53657e; }
+    </style>
+  </defs>
+  <rect class="bg" width="1600" height="1000" />
+  <g id="walls">
+    <rect class="wall" x="110" y="90" width="1380" height="840" rx="24" />
+  </g>
+  <g id="rooms">
+    <rect id="room-1-101" class="room" x="190" y="200" width="220" height="180" rx="20" />
+    <rect id="room-1-102" class="room" x="440" y="200" width="220" height="180" rx="20" />
+    <rect id="room-1-103" class="room" x="690" y="200" width="220" height="180" rx="20" />
+    <rect id="room-1-104" class="room" x="940" y="200" width="220" height="180" rx="20" />
+    <rect id="room-physics-lab" class="room" x="190" y="470" width="220" height="180" rx="20" />
+    <rect id="room-chemistry-lab" class="room" x="440" y="470" width="220" height="180" rx="20" />
+    <rect id="room-seminar-hall" class="room" x="940" y="470" width="220" height="180" rx="20" />
+    <rect id="room-reading-lounge" class="room" x="1180" y="470" width="220" height="180" rx="20" />
+    <rect id="room-dept-office" class="room" x="1110" y="720" width="250" height="150" rx="20" />
+    <rect id="room-1-entrance" class="room" x="180" y="720" width="240" height="150" rx="20" />
+  </g>
+  <g id="corridors">
+    <rect class="corridor" x="400" y="390" width="800" height="90" rx="20" />
+    <rect class="corridor" x="400" y="660" width="880" height="70" rx="20" />
+    <rect class="corridor" x="400" y="390" width="70" height="340" rx="20" />
+    <rect class="corridor" x="1130" y="390" width="70" height="340" rx="20" />
+  </g>
+  <g id="labels">
+    <text class="label" x="260" y="300">101</text>
+    <text class="label" x="510" y="300">102</text>
+    <text class="label" x="760" y="300">103</text>
+    <text class="label" x="1010" y="300">104</text>
+    <text class="label" x="250" y="575">Physics Lab</text>
+    <text class="label" x="500" y="575">Chemistry</text>
+    <text class="label" x="1015" y="575">Seminar</text>
+    <text class="label" x="1225" y="575">Reading</text>
+    <text class="label" x="1180" y="802">Office</text>
+    <text class="label" x="250" y="802">Entrance</text>
+    <text class="small" x="720" y="435">Academic corridor</text>
+  </g>
+</svg>

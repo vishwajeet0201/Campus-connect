@@ -20,7 +20,7 @@ export function BottomTabBar({ active = "Home", onChange }: { active?: string; o
   if (!mounted) return null;
 
   return createPortal(
-    <GlassBar className="bottom-tab-bar z-20 flex items-center justify-between gap-1" role="navigation" aria-label="Primary navigation">
+    <GlassBar className="bottom-tab-bar z-30 flex items-center justify-between gap-1" role="navigation" aria-label="Primary navigation">
       {tabs.map(({ label, icon: Icon }) => {
         const isActive = label === active;
         return (
