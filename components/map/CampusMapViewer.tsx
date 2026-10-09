@@ -1,10 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { AnimatePresence, motion } from "framer-motion";
-import { MapPin, SearchX } from "lucide-react";
-import { clamp, screenToWorld } from "@/lib/campus";
-import { GroundFloorMap } from "./GroundFloorMap";
+import { Info, Minus, Plus, Scan } from "lucide-react";
+import { imageFor, planFor } from "@/lib/maps";
+import type { FloorPlan } from "@/lib/maps/types";
+import type { PlanRoute } from "@/lib/maps/routing";
+import { FloorPlanLayer, RouteLayer } from "./FloorPlanLayer";
+import { MapViewport, type Box, type Insets, type MapController } from "./MapViewport";
 
 export type MapFloor = {
   id: string;
@@ -37,221 +39,150 @@ export type MapPoi = {
   floor_code?: string;
 };
 
-const CATEGORY_STYLES: Record<string, { color: string; label: string }> = {
-  classroom: { color: "var(--color-accent)", label: "Classroom" },
-  lab: { color: "var(--color-orange)", label: "Lab" },
-  conference: { color: "#7c6cff", label: "Conference" },
-  staff_room: { color: "#7f8cff", label: "Staff" },
-  toilet_men: { color: "#31b9ff", label: "Men" },
-  toilet_women: { color: "#ff6ba6", label: "Women" },
-  canteen: { color: "#34c759", label: "Canteen" },
-  library: { color: "#8e5cff", label: "Library" },
-  office: { color: "#6f9eff", label: "Office" },
-  entrance: { color: "#00b894", label: "Entrance" },
-  stairs: { color: "#a9b1ff", label: "Stairs" },
-  lift: { color: "#00a6ff", label: "Lift" },
-  ramp: { color: "#9ecc6d", label: "Ramp" },
-  other: { color: "#8c8c93", label: "Other" },
+/** Filter chips -> floor-plan categories they emphasise. */
+export const FILTER_CATEGORIES: Record<string, string[]> = {
+  classroom: ["room", "hall"],
+  lab: ["lab"],
+  toilets: ["washroom_men", "washroom_women"],
+  canteen: ["food"],
+  library: ["library"],
+  office: ["office", "faculty"],
 };
+
+const quantise = (k: number) => Math.pow(2, Math.round(Math.log2(k) * 4) / 4);
+
+/** Bounding box of a named feature on a plan, for focusing the camera. */
+export function featureBox(plan: FloorPlan, id: string): Box | null {
+  const room = plan.rooms.find((r) => r.id === id);
+  if (room) return { x: room.bbox[0], y: room.bbox[1], w: room.bbox[2], h: room.bbox[3] };
+  const place = plan.places.find((p) => p.id === id);
+  if (place?.bbox) return { x: place.bbox[0], y: place.bbox[1], w: place.bbox[2], h: place.bbox[3] };
+  if (place) return { x: place.x - 120, y: place.y - 80, w: 240, h: 160 };
+  const gate = plan.gates.find((g) => g.id === id);
+  if (gate) return { x: gate.bbox[0], y: gate.bbox[1], w: gate.bbox[2], h: gate.bbox[3] };
+  return null;
+}
+
+function boxOf(points: { x: number; y: number }[]): Box {
+  const xs = points.map((p) => p.x);
+  const ys = points.map((p) => p.y);
+  const x = Math.min(...xs);
+  const y = Math.min(...ys);
+  return { x, y, w: Math.max(Math.max(...xs) - x, 1), h: Math.max(Math.max(...ys) - y, 1) };
+}
 
 export function CampusMapViewer({
   floors,
   pois,
   activeFloorId,
+  insets,
+  selectedFeatureId,
+  onSelectFeature,
+  focusRequest,
   selectedPoiId,
   onSelectPoi,
   categoryFilter,
-  query,
-  focusPoiId,
-  onMapTap,
   onPanningChange,
-  routeNodeIds,
+  route,
   routeStep = 0,
 }: {
   floors: MapFloor[];
   pois: MapPoi[];
   activeFloorId: string;
+  insets: Insets;
+  selectedFeatureId?: string | null;
+  onSelectFeature: (id: string | null) => void;
+  /** Change `nonce` to fly to `id` again. */
+  focusRequest?: { id: string; nonce: number } | null;
   selectedPoiId?: string | null;
-  onSelectPoi: (poi: MapPoi) => void;
+  onSelectPoi: (poi: MapPoi | null) => void;
   categoryFilter: string;
-  query: string;
-  focusPoiId?: string | null;
-  onMapTap?: () => void;
   onPanningChange?: (isPanning: boolean) => void;
-  routeNodeIds?: string[] | null;
+  route?: PlanRoute | null;
   routeStep?: number;
 }) {
-  const containerRef = useRef<HTMLDivElement | null>(null);
-  const dragRef = useRef<{ pointerId: number; startX: number; startY: number; originX: number; originY: number } | null>(null);
-  const [zoom, setZoom] = useState(1);
-  const [pan, setPan] = useState({ x: 0, y: 0 });
-  const [hoveredPoiId, setHoveredPoiId] = useState<string | null>(null);
-
   const activeFloor = floors.find((floor) => floor.id === activeFloorId) ?? floors[0];
-  const isVjtiGroundFloor = activeFloor?.building_code === "VJTI" && activeFloor.code === "G";
-  const activePois = useMemo(() => {
-    return pois.filter((poi) => poi.floor_id === activeFloorId && (categoryFilter === "all" || poi.category === categoryFilter || (categoryFilter === "toilets" && (poi.category === "toilet_men" || poi.category === "toilet_women"))));
-  }, [pois, activeFloorId, categoryFilter]);
+  const plan = planFor(activeFloor?.building_code, activeFloor?.code);
+  const image = plan ? null : imageFor(activeFloor?.building_code, activeFloor?.code);
+  const controller = useRef<MapController | null>(null);
+  const [scale, setScale] = useState(0.1);
+  const onScale = useCallback((k: number) => setScale((current) => (quantise(k) === current ? current : quantise(k))), []);
 
-  const filteredPois = useMemo(() => {
-    const term = query.trim().toLowerCase();
-    if (!term) return activePois;
-    return activePois.filter((poi) => {
-      const haystack = `${poi.name} ${poi.room_code ?? ""}`.toLowerCase();
-      return haystack.includes(term);
-    });
-  }, [activePois, query]);
-  const visiblePois = isVjtiGroundFloor ? [] : filteredPois;
+  const highlight = useMemo(() => (categoryFilter === "all" ? null : new Set(FILTER_CATEGORIES[categoryFilter] ?? [categoryFilter])), [categoryFilter]);
+  const matches = plan && highlight ? plan.rooms.filter((r) => r.category && highlight.has(r.category)).length + plan.places.filter((p) => highlight.has(p.category)).length : null;
 
-  const handleZoom = (nextZoom: number, originX?: number, originY?: number) => {
-    const clamped = clamp(nextZoom, 0.75, 2.8);
-    if (originX == null || originY == null) {
-      setZoom(clamped);
-      return;
-    }
-    const scaleRatio = clamped / zoom;
-    setPan((current) => ({
-      x: (current.x - originX) * scaleRatio + originX,
-      y: (current.y - originY) * scaleRatio + originY,
-    }));
-    setZoom(clamped);
-  };
-
-  const onPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
-    const target = event.target as HTMLElement;
-    if (target.closest("[role='button']")) {
-      return;
-    }
-    onMapTap?.();
-    onPanningChange?.(true);
-    event.preventDefault();
-    const rect = event.currentTarget.getBoundingClientRect();
-    dragRef.current = {
-      pointerId: event.pointerId,
-      startX: event.clientX,
-      startY: event.clientY,
-      originX: pan.x,
-      originY: pan.y,
-    };
-    event.currentTarget.setPointerCapture(event.pointerId);
-    if (event.pointerType === "touch") {
-      const now = Date.now();
-      if ((event.currentTarget as HTMLDivElement).dataset.lastTapTime && now - Number((event.currentTarget as HTMLDivElement).dataset.lastTapTime) < 320) {
-        handleZoom(clamp(zoom * 1.35, 0.75, 2.8), rect.width / 2, rect.height / 2);
-        (event.currentTarget as HTMLDivElement).dataset.lastTapTime = String(0);
-      } else {
-        (event.currentTarget as HTMLDivElement).dataset.lastTapTime = String(now);
-      }
-    }
-  };
-
-  const onPointerMove = (event: React.PointerEvent<HTMLDivElement>) => {
-    if (!dragRef.current || event.pointerId !== dragRef.current.pointerId) return;
-    const dx = event.clientX - dragRef.current.startX;
-    const dy = event.clientY - dragRef.current.startY;
-    setPan({ x: dragRef.current.originX + dx / zoom, y: dragRef.current.originY + dy / zoom });
-  };
-
-  const onPointerUp = (event: React.PointerEvent<HTMLDivElement>) => {
-    if (dragRef.current?.pointerId === event.pointerId) {
-      dragRef.current = null;
-      onPanningChange?.(false);
-    }
-  };
-
-  const onWheel = (event: React.WheelEvent<HTMLDivElement>) => {
-    event.preventDefault();
-    const rect = event.currentTarget.getBoundingClientRect();
-    const rawX = event.clientX - rect.left;
-    const rawY = event.clientY - rect.top;
-    const nextZoom = clamp(zoom * (event.deltaY < 0 ? 1.12 : 0.88), 0.75, 2.8);
-    const world = screenToWorld(rawX, rawY, rect.width, rect.height, zoom, pan.x, pan.y);
-    const nextPan = {
-      x: (world.x - rect.width / 2) * (1 - nextZoom / zoom) + pan.x,
-      y: (world.y - rect.height / 2) * (1 - nextZoom / zoom) + pan.y,
-    };
-    setZoom(nextZoom);
-    setPan(nextPan);
-  };
-
-  const focusPoi = useCallback((poi: MapPoi) => {
-    if (!containerRef.current) return;
-    const rect = containerRef.current.getBoundingClientRect();
-    const world = { x: poi.x, y: poi.y };
-    const targetX = (world.x - rect.width / 2) * 1.1;
-    const targetY = (world.y - rect.height / 2) * 1.1;
-    setPan({ x: targetX, y: targetY });
-    setZoom(1.4);
-    onSelectPoi(poi);
-  }, [onSelectPoi]);
+  // Only floors without a real plan or image fall back to the seeded markers.
+  const fallbackPois = useMemo(() => (plan || (image && image.width) ? [] : pois.filter((poi) => poi.floor_id === activeFloor?.id && (categoryFilter === "all" || poi.category === categoryFilter || (categoryFilter === "toilets" && (poi.category === "toilet_men" || poi.category === "toilet_women"))))), [activeFloor?.id, categoryFilter, image, plan, pois]);
 
   useEffect(() => {
-    if (focusPoiId) {
-      const poi = pois.find((candidate) => candidate.id === focusPoiId);
-      if (poi) focusPoi(poi);
-    }
-  }, [focusPoi, focusPoiId, pois]);
+    if (!plan || !focusRequest) return;
+    const box = featureBox(plan, focusRequest.id);
+    if (box) controller.current?.focus(box);
+  }, [focusRequest, plan]);
 
-  const touchStyle = useMemo(() => ({
-    transform: isVjtiGroundFloor
-      ? `translate(calc(-50% + ${pan.x}px), ${pan.y}px) scale(${zoom})`
-      : `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
-    transformOrigin: "center center",
-    willChange: "transform",
-    touchAction: "none",
-  }), [isVjtiGroundFloor, pan.x, pan.y, zoom]);
+  // Show the whole walk when a route appears, then follow its steps.
+  useEffect(() => {
+    if (!plan || !route) return;
+    const step = route.steps[routeStep];
+    const points = routeStep > 0 && step && step.end > step.start ? route.points.slice(step.start, step.end + 1) : route.points;
+    const box = boxOf(points);
+    const pad = 140;
+    controller.current?.fit({ x: box.x - pad, y: box.y - pad, w: box.w + 2 * pad, h: box.h + 2 * pad });
+  }, [plan, route, routeStep]);
 
   if (!activeFloor) {
-    return <div className="campus-empty-state"><SearchX className="h-5 w-5" /> <span>No map floor available.</span></div>;
+    return <div className="campus-empty-state"><Info className="h-5 w-5" /> <span>No map floor available.</span></div>;
   }
+
+  const width = plan?.floor.width ?? (image?.width || activeFloor.width);
+  const height = plan?.floor.height ?? (image?.height || activeFloor.height);
+  const label = `${activeFloor.building_name ?? activeFloor.building_code ?? "Campus"} ${activeFloor.name} map`;
+  const src = image?.width ? image.src : activeFloor.svg_path;
 
   return (
     <div className="campus-map-shell">
-      <div ref={containerRef} className="campus-map-view" data-zoomed={zoom > 1.05} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerLeave={onPointerUp} onWheel={onWheel} role="application" aria-label="Campus map viewer">
-        <div className={`campus-map-matrix${isVjtiGroundFloor ? " campus-map-matrix--stitched" : ""}`} style={touchStyle}>
-          {isVjtiGroundFloor ? (
-            <GroundFloorMap routeNodeIds={routeNodeIds} routeStep={routeStep} />
-          ) : (
-            <img src={activeFloor.svg_path} alt={`${activeFloor.building_name ?? activeFloor.building_code ?? "Campus"} ${activeFloor.name} floor plan`} className="campus-map-image" loading="lazy" />
-          )}
-          {visiblePois.map((poi) => {
-            const style = CATEGORY_STYLES[poi.category ?? "other"] ?? CATEGORY_STYLES.other;
-            const isSelected = selectedPoiId === poi.id;
-            const isHovered = hoveredPoiId === poi.id;
-            return (
-              <motion.button
-                key={poi.id}
-                type="button"
-                className="poi-marker"
-                style={{
-                  left: `${(poi.x / activeFloor.width) * 100}%`,
-                  top: `${(poi.y / activeFloor.height) * 100}%`,
-                  background: style.color,
-                  boxShadow: isSelected ? `0 0 0 10px ${style.color}22` : `0 0 0 6px rgba(255,255,255,0.15)`,
-                  opacity: isSelected || isHovered || !query ? 1 : 0.85,
-                }}
-                onClick={() => focusPoi(poi)}
-                onMouseEnter={() => setHoveredPoiId(poi.id)}
-                onMouseLeave={() => setHoveredPoiId(null)}
-                aria-label={poi.name}
-                whileTap={{ scale: 0.9 }}
-              >
-                <span className="poi-marker-inner" />
-                <span className="poi-marker-label">{poi.name}</span>
-              </motion.button>
-            );
-          })}
-        </div>
-        <div className="map-zoom-badge">{zoom.toFixed(2)}x</div>
-      </div>
-      <AnimatePresence>
-        {filteredPois.length === 0 && (
-          <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="map-empty-state">
-            <MapPin className="h-5 w-5" />
-            <span>No POIs found for this floor.</span>
-          </motion.div>
+      <MapViewport
+        key={activeFloor.id}
+        width={width}
+        height={height}
+        insets={insets}
+        controllerRef={controller}
+        onScale={onScale}
+        onGesture={(active) => onPanningChange?.(active)}
+        onTap={(target) => {
+          const feature = target.closest("[data-feature]")?.getAttribute("data-feature") ?? null;
+          const poi = target.closest("[data-poi]")?.getAttribute("data-poi") ?? null;
+          if (poi) onSelectPoi(pois.find((p) => p.id === poi) ?? null);
+          else onSelectFeature(feature);
+        }}
+        label={label}
+      >
+        {plan ? (
+          <>
+            <FloorPlanLayer plan={plan} scale={scale} selectedId={selectedFeatureId} highlight={highlight} />
+            {route && <RouteLayer route={route} step={routeStep} scale={scale} />}
+          </>
+        ) : (
+          <>
+            <rect width={width} height={height} fill="#ffffff" />
+            {src && <image href={src} width={width} height={height} preserveAspectRatio="none" />}
+            {fallbackPois.map((poi) => (
+              <g key={poi.id} data-poi={poi.id} role="button" aria-label={poi.name} transform={`translate(${poi.x} ${poi.y}) scale(${1 / scale})`} className="plan-poi" data-selected={selectedPoiId === poi.id || undefined}>
+                <circle r={9} />
+              </g>
+            ))}
+          </>
         )}
-      </AnimatePresence>
+      </MapViewport>
+
+      <div className="map-zoom-controls" style={{ bottom: `${insets.bottom + 12}px` }}>
+        <button type="button" aria-label="Zoom in" onClick={() => controller.current?.zoomBy(1.6)}><Plus className="h-4 w-4" /></button>
+        <button type="button" aria-label="Zoom out" onClick={() => controller.current?.zoomBy(1 / 1.6)}><Minus className="h-4 w-4" /></button>
+        <button type="button" aria-label="Show whole floor" onClick={() => controller.current?.fit()}><Scan className="h-4 w-4" /></button>
+      </div>
+
+      {image?.partial && <p className="map-notice" style={{ top: `${insets.top + 8}px`, left: `${insets.left}px`, right: `${insets.right}px` }} role="note">{image.partial}</p>}
+      {matches === 0 && <p className="map-notice" style={{ top: `${insets.top + 8}px`, left: `${insets.left}px`, right: `${insets.right}px` }} role="status">Nothing of this kind on this floor.</p>}
     </div>
   );
 }

@@ -4,7 +4,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import { motion } from "framer-motion";
 import { ArrowRight, ChevronLeft, ChevronRight, Keyboard, Mic, MicOff, RotateCcw, Volume2, X } from "lucide-react";
 import { GlassButton } from "@/components/glass";
-import { NAV_PLACES, isBackCommand, isNextCommand, isRepeatCommand, isStopCommand, matchPlaces, planRoute, resolvePlace, splitJourney, type NavPlace, type NavRoute } from "@/lib/navigation";
+import { NAV_PLACES, isBackCommand, isNextCommand, isRepeatCommand, isStopCommand, matchPlaces, namesakes, normalizeSpeech, planRoute, resolvePlace, splitJourney, type NavPlace, type NavRoute } from "@/lib/navigation";
 
 type Phase = "origin" | "destination" | "guiding" | "arrived";
 type Expecting = "origin" | "destination" | "journey";
@@ -53,7 +53,7 @@ export function VoiceAssistant({ onRouteChange, onClose }: { onRouteChange: (rou
 
   const recognitionRef = useRef<Recognition | null>(null);
   const sessionRef = useRef(0);
-  const stateRef = useRef({ phase, origin, destination, route, stepIndex });
+  const stateRef = useRef({ phase, origin, destination, route, stepIndex, suggestions });
 
   const stopListening = useCallback(() => {
     recognitionRef.current?.abort();
@@ -167,14 +167,15 @@ export function VoiceAssistant({ onRouteChange, onClose }: { onRouteChange: (rou
       return;
     }
     setRoute(nextRoute);
+    setDestination(nextRoute.to);
     setPhase("guiding");
     setSuggestions([]);
-    await speak(`Okay, from ${from.name} to ${to.name}. ${nextRoute.steps.length - 1} steps. Left, right, up and down are as shown on the map.`);
+    await speak(`Okay, from ${from.label} to ${nextRoute.to.label}. ${nextRoute.steps.length - 1} steps. The first direction is as seen on the map; after that, left and right are as you walk.`);
     if (sessionRef.current === session) await flow.current.guide(session, nextRoute, 1);
   }, [listenAndHandle, speak]);
 
   useLayoutEffect(() => {
-    stateRef.current = { phase, origin, destination, route, stepIndex };
+    stateRef.current = { phase, origin, destination, route, stepIndex, suggestions };
     flow.current.askOrigin = async (session) => {
       setPhase("origin");
       await speak("Where are you right now?");
@@ -223,6 +224,23 @@ export function VoiceAssistant({ onRouteChange, onClose }: { onRouteChange: (rou
         }
       }
 
+      // Answering "which one?": match the reply against each candidate's "near ..." hint first.
+      const pending = stateRef.current.suggestions;
+      if (pending.length > 1 && pending.every((option) => option.name === pending[0].name)) {
+        const said = normalizeSpeech(texts.join(" "));
+        const picked = pending.find((option) => {
+          const hint = option.label.match(/\(near (.+)\)$/)?.[1];
+          return hint && ` ${said} `.includes(` ${normalizeSpeech(hint)} `);
+        });
+        if (picked) {
+          setSuggestions([]);
+          setOrigin(picked);
+          await speak(`Got it, you're at ${picked.label}.`);
+          if (sessionRef.current === session) await flow.current.askDestination(session);
+          return;
+        }
+      }
+
       let place = texts.map((text) => resolvePlace(text)).find(Boolean) ?? null;
       let clarification: string | null = null;
       if (!place) {
@@ -250,6 +268,14 @@ export function VoiceAssistant({ onRouteChange, onClose }: { onRouteChange: (rou
         return;
       }
 
+      // "I'm at the boys washroom" could be either of two: ask which one.
+      const twins = namesakes(place);
+      if (expecting === "origin" && twins.length) {
+        const options = [place, ...twins];
+        setSuggestions(options);
+        await speak(`There's more than one ${place.name}. Which one are you at: ${options.map((option) => option.label.replace(`${place.name} `, "the one ").replace(/[()]/g, "")).join(", or ")}?`);
+        return;
+      }
       setSuggestions([]);
       if (expecting === "destination" || (expecting === "journey" && currentOrigin)) {
         setDestination(place);
@@ -257,7 +283,7 @@ export function VoiceAssistant({ onRouteChange, onClose }: { onRouteChange: (rou
         return;
       }
       setOrigin(place);
-      await speak(`Got it, you're at ${place.name}.`);
+      await speak(`Got it, you're at ${place.label}.`);
       if (sessionRef.current === session) await flow.current.askDestination(session);
     };
   });
@@ -293,7 +319,21 @@ export function VoiceAssistant({ onRouteChange, onClose }: { onRouteChange: (rou
     void flow.current.handleAnswer(session, [text], expectingNow());
   };
 
-  const choose = (place: NavPlace) => submitText(place.name);
+  // A tapped chip is unambiguous, even for places that share a name.
+  const choose = (place: NavPlace) => {
+    sessionRef.current += 1;
+    stopListening();
+    const session = sessionRef.current;
+    setSuggestions([]);
+    const { origin: currentOrigin, phase: currentPhase } = stateRef.current;
+    if (currentPhase === "destination" && currentOrigin) {
+      setDestination(place);
+      void startRoute(session, currentOrigin, place);
+      return;
+    }
+    setOrigin(place);
+    void speak(`Got it, you're at ${place.label}.`).then(() => { if (sessionRef.current === session) void flow.current.askDestination(session); });
+  };
 
   const micTap = () => {
     if (listening) return stopListening();
@@ -333,7 +373,7 @@ export function VoiceAssistant({ onRouteChange, onClose }: { onRouteChange: (rou
       <header className="flex items-center justify-between gap-3">
         <div className="min-w-0">
           <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--color-accent)]">Campus guide · Ground floor</p>
-          <p className="voice-route-summary">{origin ? origin.name : "Start?"} <ArrowRight className="inline h-3.5 w-3.5" /> {destination ? destination.name : "Destination?"}</p>
+          <p className="voice-route-summary">{origin ? origin.label : "Start?"} <ArrowRight className="inline h-3.5 w-3.5" /> {destination ? destination.label : "Destination?"}</p>
         </div>
         <div className="flex shrink-0 items-center gap-1">
           <button type="button" className="voice-icon-button" aria-label="Start over" onClick={restart}><RotateCcw className="h-4 w-4" /></button>
@@ -345,9 +385,9 @@ export function VoiceAssistant({ onRouteChange, onClose }: { onRouteChange: (rou
       {transcript && <p className="voice-transcript">You said: “{transcript}”</p>}
       {voiceError && <p className="voice-error" role="alert">{voiceError}</p>}
 
-      {suggestions.length > 0 && phase !== "guiding" && <div className="mt-3 flex flex-wrap gap-2">{suggestions.map((place) => <button key={place.id} type="button" className="filter-chip" onClick={() => choose(place)}>{place.name}</button>)}</div>}
+      {suggestions.length > 0 && phase !== "guiding" && <div className="mt-3 flex flex-wrap gap-2">{suggestions.map((place) => <button key={place.id} type="button" className="filter-chip" onClick={() => choose(place)}>{place.label}</button>)}</div>}
 
-      {route && <ol className="voice-steps">{steps.slice(1).map((step, index) => <li key={step.nodeId + index} data-active={index + 1 === stepIndex} data-done={index + 1 < stepIndex}><button type="button" onClick={() => goToStep(index + 1)}>{step.text}</button></li>)}</ol>}
+      {route && <ol className="voice-steps">{steps.slice(1).map((step, index) => <li key={`${step.start}-${index}`} data-active={index + 1 === stepIndex} data-done={index + 1 < stepIndex}><button type="button" onClick={() => goToStep(index + 1)}>{step.text}</button></li>)}</ol>}
 
       <div className="voice-controls">
         {route ? <GlassButton type="button" className="voice-nav-button" aria-label="Previous step" onClick={() => goToStep(stepIndex - 1)} disabled={stepIndex <= 1}><ChevronLeft className="h-5 w-5" /></GlassButton> : <span className="voice-nav-spacer" />}
