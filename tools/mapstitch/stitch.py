@@ -24,6 +24,7 @@ import numpy as np
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
 from mapstitch.core import (  # noqa: E402
+    SCREEN_SHAPE,
     accept,
     deshadow,
     edge_map,
@@ -36,6 +37,7 @@ from mapstitch.core import (  # noqa: E402
 )
 
 CONTENT_MARGIN = 24
+CONTENT_MIN_AREA = 25  # px; smaller specks are noise, not map content
 
 
 def estimate_scale(a, ma, b, mb) -> tuple[float, int] | None:
@@ -104,34 +106,54 @@ def register(a, ma, b, mb) -> dict:
             scale = 1.0
         if accept(st):
             result = {"status": "proven", "scale": scale, "dx": dx, "dy": dy, "stats": st}
-            rivals = [r for r in plausible[1:] if accept(r[2]) and (abs(r[0] - dx) > 8 or abs(r[1] - dy) > 8)]
-            if rivals and rivals[0][2]["matched_edges"] > 0.5 * st["matched_edges"]:
+            # A rival offset is a real alternative only if it fits about as well
+            # pixel for pixel; along uniform bands, shifted offsets match the
+            # band edges but not the labels drawn on them.
+            bad = lambda stats: stats["mismatch_fraction"] * stats["overlap_px"]  # noqa: E731
+            rivals = [r for r in plausible[1:] if accept(r[2]) and (abs(r[0] - dx) > 8 or abs(r[1] - dy) > 8)
+                      and r[2]["matched_edges"] > 0.5 * st["matched_edges"] and bad(r[2]) <= 1.5 * bad(st) + 50]
+            if rivals:
                 result["status"] = "ambiguous"
                 result["rival"] = {"dx": rivals[0][0], "dy": rivals[0][1], "stats": rivals[0][2]}
             return result
     est = estimate_scale(a, ma, b, mb)
+    unresolved = {"status": "unresolved", "reason": "no translation makes the overlap agree", "best": rows and {"dx": rows[0][0], "dy": rows[0][1], "stats": rows[0][2]}}
+    if est and est[0] > 1.05:
+        # b shows the map smaller (zoomed out, or a downscaled upload). Verify in
+        # b's coarser frame by shrinking a, rather than judging edges on an
+        # upsampled, blurrier b; then express the result in a's frame.
+        inv = _register_zoomed(b, mb, a, ma, (1 / est[0], est[1]))
+        if inv is None or inv["status"] != "proven":
+            return inv or unresolved
+        s = inv["scale"]
+        return {**inv, "scale": 1 / s, "dx": -inv["dx"] / s, "dy": -inv["dy"] / s, "verified_in": "the zoomed-out tile's frame"}
     if est and abs(est[0] - 1) > 0.005:
-        # A clearly pinch-zoomed tile: locate it at the SIFT zoom, then let the
-        # residual pick the exact zoom (the overlap must agree edge-for-edge).
-        bs, mbs = rescale(b, mb, est[0])
-        cands = search_translation(a, ma, bs, mbs, keep=3)
-        best = None
-        for dx, dy in cands:
-            rx, ry, st = refine(a, ma, bs, mbs, dx, dy, 5)
-            if best is None or st["matched_edges"] > best[2]["matched_edges"]:
-                best = (rx, ry, st)
-        if best:
-            s, sx, sy, sst = sweep_scale(a, ma, b, mb, best[0], best[1], round(est[0], 3), 0.008, 0.001)
-            s, sx, sy, sst = sweep_scale(a, ma, b, mb, sx, sy, s, 0.001, 0.00025)
-            if accept(sst):
-                return {"status": "proven", "scale": s, "dx": sx, "dy": sy, "stats": sst, "sift_inliers": est[1]}
-            return {"status": "unresolved", "reason": f"zoomed tile (scale ~{est[0]:.3f}) did not verify", "best": {"scale": s, "dx": sx, "dy": sy, "stats": sst}}
-    best = rows[0] if rows else None
-    return {"status": "unresolved", "reason": "no translation makes the overlap agree", "best": best and {"dx": best[0], "dy": best[1], "stats": best[2]}}
+        return _register_zoomed(a, ma, b, mb, est) or unresolved
+    return unresolved
 
 
-def composite(images, masks, transforms):
-    """Place every tile; each canvas pixel comes from the tile it sits deepest inside."""
+def _register_zoomed(a, ma, b, mb, est) -> dict | None:
+    """Place b, which is at a clearly different zoom (est = (scale, SIFT inliers)):
+    locate it at the SIFT zoom, then let the residual pick the exact zoom (the
+    overlap must agree edge-for-edge)."""
+    bs, mbs = rescale(b, mb, est[0])
+    best = None
+    for dx, dy in search_translation(a, ma, bs, mbs, keep=3):
+        rx, ry, st = refine(a, ma, bs, mbs, dx, dy, 5)
+        if best is None or st["matched_edges"] > best[2]["matched_edges"]:
+            best = (rx, ry, st)
+    if not best:
+        return None
+    s, sx, sy, sst = sweep_scale(a, ma, b, mb, best[0], best[1], round(est[0], 3), 0.008, 0.001)
+    s, sx, sy, sst = sweep_scale(a, ma, b, mb, sx, sy, s, 0.001, 0.00025)
+    if accept(sst):
+        return {"status": "proven", "scale": s, "dx": sx, "dy": sy, "stats": sst, "sift_inliers": est[1]}
+    return {"status": "unresolved", "reason": f"zoomed tile (scale ~{est[0]:.3f}) did not verify", "best": {"scale": s, "dx": sx, "dy": sy, "stats": sst}}
+
+
+def composite(images, masks, transforms, low_priority=()):
+    """Place every tile; each canvas pixel comes from the tile it sits deepest inside.
+    Upsampled (zoomed-out or downscaled) tiles only fill what no sharper tile shows."""
     corners = []
     for img, (s, tx, ty) in zip(images, transforms):
         h, w = img.shape[:2]
@@ -150,8 +172,7 @@ def composite(images, masks, transforms):
         if s != 1.0:
             wm = cv2.erode(wm, np.ones((3, 3), np.uint8))
         depth = cv2.distanceTransform(wm, cv2.DIST_L2, 5)
-        # Upsampled (pinch-zoomed) tiles only fill what no native tile shows.
-        if s > 1.0:
+        if s > 1.0 or i in low_priority:
             depth = np.where(wm > 0, depth * 1e-3 + 1e-6, 0)
         take = depth > best
         canvas[take] = warped[take]
@@ -183,11 +204,18 @@ def consistency(images, masks, transforms, canvas, origin) -> list[dict]:
     return out
 
 
-def content_bbox(canvas, owner):
+def content_bbox(canvas, owner, min_area=CONTENT_MIN_AREA):
+    """Bounding box of drawn content. Specks smaller than min_area pixels (JPEG
+    and resampling noise in near-white background) don't count; real marks,
+    down to 1px outlines and single glyphs, are larger."""
     covered = owner >= 0
-    content = (canvas.min(axis=2) < 245) & covered
-    ys, xs = np.where(content)
-    return int(xs.min()), int(ys.min()), int(xs.max()) + 1, int(ys.max()) + 1
+    content = ((canvas.min(axis=2) < 245) & covered).astype(np.uint8)
+    n, _, stats, _ = cv2.connectedComponentsWithStats(content, connectivity=8)
+    keep = stats[1:][stats[1:, cv2.CC_STAT_AREA] >= min_area]
+    x0, y0 = keep[:, cv2.CC_STAT_LEFT].min(), keep[:, cv2.CC_STAT_TOP].min()
+    x1 = (keep[:, cv2.CC_STAT_LEFT] + keep[:, cv2.CC_STAT_WIDTH]).max()
+    y1 = (keep[:, cv2.CC_STAT_TOP] + keep[:, cv2.CC_STAT_HEIGHT]).max()
+    return int(x0), int(y0), int(x1), int(y1)
 
 
 def main() -> int:
@@ -202,43 +230,78 @@ def main() -> int:
     config = json.loads((args.folder / "stitch.json").read_text()) if (args.folder / "stitch.json").exists() else {}
     excluded = config.get("exclude", {})
     tiles = [t for t in list_tiles(args.folder) if t.name not in excluded]
-    images = [deshadow(cv2.imread(str(p), cv2.IMREAD_COLOR)) for p in tiles]
+    images, resampled = [], {}
+    for path in tiles:
+        img = cv2.imread(str(path), cv2.IMREAD_COLOR)
+        h, w = img.shape[:2]
+        if (h, w) != SCREEN_SHAPE:
+            # Screenshots that were downscaled on the way here (e.g. by a chat
+            # upload) are brought back to the phone's resolution; they keep a
+            # low priority in the composite and are flagged in the report.
+            if abs(w / h - SCREEN_SHAPE[1] / SCREEN_SHAPE[0]) > 0.005:
+                raise SystemExit(f"{path.name}: {w}x{h} is not a {SCREEN_SHAPE[1]}x{SCREEN_SHAPE[0]} screenshot")
+            img = cv2.resize(img, (SCREEN_SHAPE[1], SCREEN_SHAPE[0]), interpolation=cv2.INTER_LANCZOS4)
+            resampled[path.name] = [w, h]
+        images.append(deshadow(img))
     pill = header_bottom(images)
     mask = viewport_mask(pill)
     masks = [mask.copy() for _ in images]
 
-    transforms = [(1.0, 0.0, 0.0)]
-    seams = []
-    for i in range(1, len(images)):
-        key = f"{tiles[i - 1].name}->{tiles[i].name}"
-        pinned = config.get("pinned", {}).get(key)
-        if pinned:
-            dx, dy = int(pinned["dx"]), int(pinned["dy"])
-            # Axes the pixels *can* determine (e.g. dy across horizontal bands)
-            # are refined by residual instead of trusting a hand-measured value.
-            axes = pinned.get("refine", [])
-            rng = range(-6, 7)
-            cands = [(dx + (o if "dx" in axes else 0), dy + (o2 if "dy" in axes else 0)) for o in rng for o2 in rng]
-            dx, dy = min(set(cands), key=lambda c: overlap_stats(images[i - 1], masks[i - 1], images[i], masks[i], *c).get("mean_abs_diff", 1e9))
-            rel = {"status": "constrained", "scale": 1.0, "dx": dx, "dy": dy, "evidence": pinned["evidence"], "refined_axes": axes}
-            rel["stats"] = overlap_stats(images[i - 1], masks[i - 1], images[i], masks[i], dx, dy)
-            if rel["stats"].get("overlap_px", 0) and rel["stats"]["mismatch_fraction"] > 0.03:
-                raise SystemExit(f"{key}: pinned offset contradicts the pixels (mismatch {rel['stats']['mismatch_fraction']:.3f})")
-        else:
-            rel = register(images[i - 1], masks[i - 1], images[i], masks[i])
-            if rel["status"] == "unresolved":
-                print(json.dumps({"seam": key, **rel}, indent=2, default=str))
-                raise SystemExit(f"{key}: seam could not be proven; pin it in {args.folder / 'stitch.json'} with evidence")
-            if rel["status"] == "ambiguous":
-                print(json.dumps({"seam": key, **rel}, indent=2, default=str))
-                raise SystemExit(f"{key}: two different offsets both fit; pin the correct one with evidence")
-        # Tile i, scaled by rel.scale, sits at (dx, dy) in tile i-1's screen frame:
-        # canvas = s_prev * (scale * p + d) + t_prev.
-        s_prev, tx_prev, ty_prev = transforms[-1]
-        transforms.append((s_prev * rel["scale"], tx_prev + s_prev * rel["dx"], ty_prev + s_prev * rel["dy"]))
-        seams.append({"from": tiles[i - 1].name, "to": tiles[i].name, **rel})
+    def pinned_seam(a: int, b: int):
+        pin = config.get("pinned", {}).get(f"{tiles[a].name}->{tiles[b].name}")
+        if not pin:
+            return None
+        dx, dy = int(pin["dx"]), int(pin["dy"])
+        # Axes the pixels *can* determine (e.g. dy across horizontal bands)
+        # are refined by residual instead of trusting a hand-measured value.
+        axes = pin.get("refine", [])
+        rng = range(-6, 7)
+        cands = {(dx + (o if "dx" in axes else 0), dy + (o2 if "dy" in axes else 0)) for o in rng for o2 in rng}
+        dx, dy = min(cands, key=lambda c: overlap_stats(images[a], masks[a], images[b], masks[b], *c).get("mean_abs_diff", 1e9))
+        rel = {"status": "constrained", "scale": 1.0, "dx": dx, "dy": dy, "evidence": pin["evidence"], "refined_axes": axes}
+        rel["stats"] = overlap_stats(images[a], masks[a], images[b], masks[b], dx, dy)
+        if rel["stats"].get("overlap_px", 0) and rel["stats"]["mismatch_fraction"] > 0.03:
+            raise SystemExit(f"{tiles[a].name}->{tiles[b].name}: pinned offset contradicts the pixels (mismatch {rel['stats']['mismatch_fraction']:.3f})")
+        return rel
 
-    canvas, owner, origin = composite(images, masks, transforms)
+    # Place tiles in serial order, each against its predecessor first. A tile
+    # that doesn't overlap its predecessor (e.g. a later screenshot that bridges
+    # two earlier ones) is tried against every placed tile, and anything still
+    # unplaced is retried once more tiles are down.
+    transforms: dict[int, tuple[float, float, float]] = {0: (1.0, 0.0, 0.0)}
+    seams = []
+    pending = list(range(1, len(images)))
+    failures: dict[str, dict] = {}
+    while pending:
+        progressed = False
+        for i in list(pending):
+            for j in sorted(transforms, key=lambda j: (j != i - 1, -j)):
+                key = f"{tiles[j].name}->{tiles[i].name}"
+                if key in failures:
+                    continue
+                rel = pinned_seam(j, i) or register(images[j], masks[j], images[i], masks[i])
+                if rel["status"] == "ambiguous":
+                    print(json.dumps({"seam": key, **rel}, indent=2, default=str))
+                    raise SystemExit(f"{key}: two different offsets both fit; pin the correct one with evidence")
+                if rel["status"] == "unresolved":
+                    failures[key] = rel
+                    continue
+                # Tile i, scaled by rel.scale, sits at (dx, dy) in tile j's screen
+                # frame: canvas = s_j * (scale * p + d) + t_j.
+                s_j, tx_j, ty_j = transforms[j]
+                transforms[i] = (s_j * rel["scale"], tx_j + s_j * rel["dx"], ty_j + s_j * rel["dy"])
+                seams.append({"from": tiles[j].name, "to": tiles[i].name, **rel})
+                pending.remove(i)
+                progressed = True
+                break
+        if not progressed:
+            for key, rel in failures.items():
+                print(json.dumps({"seam": key, **rel}, default=str)[:600])
+            raise SystemExit(f"cannot place {[tiles[i].name for i in pending]}: no proven seam to any placed tile; pin one in {args.folder / 'stitch.json'} with evidence")
+    transforms = [transforms[i] for i in range(len(images))]
+
+    low = {i for i, t in enumerate(tiles) if t.name in resampled}
+    canvas, owner, origin = composite(images, masks, transforms, low)
     checks = consistency(images, masks, transforms, canvas, origin)
     x0, y0, x1, y1 = content_bbox(canvas, owner)
     m = CONTENT_MARGIN
@@ -263,6 +326,7 @@ def main() -> int:
         "seams": seams,
         "uncovered_fraction": round(uncovered, 4),
         **({"excluded_tiles": excluded} if excluded else {}),
+        **({"resampled_tiles": {name: f"received at {w}x{h}, resampled to {SCREEN_SHAPE[1]}x{SCREEN_SHAPE[0]}" for name, (w, h) in resampled.items()}} if resampled else {}),
     }
     reports = args.reports or args.out
     reports.mkdir(parents=True, exist_ok=True)
@@ -273,7 +337,7 @@ def main() -> int:
         colours = rng.integers(60, 255, (len(images) + 1, 3)).astype(np.uint8)
         own = owner[y0:y1, x0:x1]
         tint = np.where(own[..., None] >= 0, colours[own], 0)
-        cv2.imwrite(str(args.debug / f"{args.name}-owners.png"), cv2.addWeighted(out, 0.6, tint.astype(np.uint8), 0.4, 0))
+        cv2.imwrite(str(args.debug / f"{args.name}-owners.png"), cv2.addWeighted(out[..., :3], 0.6, tint.astype(np.uint8), 0.4, 0))
     summary = {"floor": args.name, "size": layout["size"], "seams": [(s["from"], s["to"], s["status"]) for s in seams], "excluded": sorted(excluded), "worst_tile_mismatch": max(c["mismatch_fraction"] for c in checks), "min_edge_coverage": min(c["edge_coverage"] for c in checks)}
     print(json.dumps(summary))
     return 0
