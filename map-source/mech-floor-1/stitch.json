@@ -1,0 +1,5 @@
+{
+  "exclude": {
+    "Screenshot_20261007_131141.jpg": "Does not overlap Screenshot_20261007_131128.jpg. Its left edge shows an unlabelled room, but the room cut off at the right of the first screenshot carries a centred 'Computational Fluid Dynamics (CFD)' label that would have to reach into that strip, so unseen floor lies between the two. Add a screenshot panned between them to place this east wing."
+  }
+}

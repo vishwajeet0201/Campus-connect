@@ -1,0 +1,156 @@
+{
+  "source": "/home/user/Campus-connect/map-source/vjti-ground-floor",
+  "image": "vjti-G.png",
+  "size": [
+    4353,
+    1835
+  ],
+  "tiles": [
+    {
+      "file": "1.jpg",
+      "scale": 1.0,
+      "x": -40.0,
+      "y": -382.0,
+      "valid_px": 1795565,
+      "mismatch_fraction": 7.40713925700267e-05,
+      "edge_coverage": 0.9822398423356326
+    },
+    {
+      "file": "2.jpg",
+      "scale": 1.0,
+      "x": 736.0,
+      "y": -337.0,
+      "valid_px": 1795565,
+      "mismatch_fraction": 0.004245460342566267,
+      "edge_coverage": 0.9995862211647875
+    },
+    {
+      "file": "3.jpg",
+      "scale": 1.0,
+      "x": 1344.0,
+      "y": -303.0,
+      "valid_px": 1795565,
+      "mismatch_fraction": 0.002268366781486607,
+      "edge_coverage": 0.9914343333541238
+    },
+    {
+      "file": "4.jpg",
+      "scale": 1.0,
+      "x": 1881.0,
+      "y": -309.0,
+      "valid_px": 1795565,
+      "mismatch_fraction": 0.004595210978160078,
+      "edge_coverage": 0.9996570710053535
+    },
+    {
+      "file": "5.jpg",
+      "scale": 1.0,
+      "x": 2570.0,
+      "y": -315.0,
+      "valid_px": 1795565,
+      "mismatch_fraction": 0.00035197834664854794,
+      "edge_coverage": 0.9923866687727058
+    },
+    {
+      "file": "6.jpg",
+      "scale": 1.0,
+      "x": 3283.0,
+      "y": -295.0,
+      "valid_px": 1795565,
+      "mismatch_fraction": 0.0,
+      "edge_coverage": 1.0
+    }
+  ],
+  "seams": [
+    {
+      "from": "1.jpg",
+      "to": "2.jpg",
+      "status": "proven",
+      "scale": 1.0,
+      "dx": 776,
+      "dy": 45,
+      "stats": {
+        "overlap_px": 394225,
+        "mismatch_fraction": 0.004149914388991058,
+        "mean_abs_diff": 0.7481488997399962,
+        "edges_a": 9776,
+        "edges_b": 10033,
+        "matched_edges": 8848,
+        "edge_agreement": 0.9492176855005674
+      }
+    },
+    {
+      "from": "2.jpg",
+      "to": "3.jpg",
+      "status": "proven",
+      "scale": 1.0,
+      "dx": 608,
+      "dy": 34,
+      "stats": {
+        "overlap_px": 689854,
+        "mismatch_fraction": 0.011312538595123026,
+        "mean_abs_diff": 1.868846161651596,
+        "edges_a": 19538,
+        "edges_b": 19647,
+        "matched_edges": 19538,
+        "edge_agreement": 0.9972477012025773
+      }
+    },
+    {
+      "from": "3.jpg",
+      "to": "4.jpg",
+      "status": "proven",
+      "scale": 1.0,
+      "dx": 537,
+      "dy": -6,
+      "stats": {
+        "overlap_px": 827955,
+        "mismatch_fraction": 0.0077153951603649955,
+        "mean_abs_diff": 1.3412576770476656,
+        "edges_a": 20790,
+        "edges_b": 21492,
+        "matched_edges": 20411,
+        "edge_agreement": 0.9899898459318941
+      }
+    },
+    {
+      "from": "4.jpg",
+      "to": "5.jpg",
+      "status": "proven",
+      "scale": 1.0,
+      "dx": 689,
+      "dy": -6,
+      "stats": {
+        "overlap_px": 555723,
+        "mismatch_fraction": 0.00878855113068921,
+        "mean_abs_diff": 1.522679464409427,
+        "edges_a": 19176,
+        "edges_b": 19109,
+        "matched_edges": 19176,
+        "edge_agreement": 0.9986908590203137
+      }
+    },
+    {
+      "from": "5.jpg",
+      "to": "6.jpg",
+      "status": "constrained",
+      "scale": 1.0,
+      "dx": 713,
+      "dy": 20,
+      "evidence": "Tile 6 shows only the uniform VJTI Hostels / path / Football Ground bands and their two labels, so pixels cannot fix its horizontal offset. dy is proven by residual: at dy=20 every overlapping pixel agrees (0 mismatches) and all six band edges coincide. dx=713 is the smallest offset consistent with: (a) neither label is visible in tile 5 (requires dx>=687); (b) labels are centred on their blocks (verified to +-1px on 30 single-label rooms of this floor); (c) the two blocks share their left edge at tile-5 x=614 and, being centred, their right edge must reach tile 6's right viewport edge (requires dx>=712.5). The blocks' true east edge is not visible in any screenshot.",
+      "refined_axes": [
+        "dy"
+      ],
+      "stats": {
+        "overlap_px": 508822,
+        "mismatch_fraction": 0.0,
+        "mean_abs_diff": 0.133402250688846,
+        "edges_a": 1495,
+        "edges_b": 1497,
+        "matched_edges": 1201,
+        "edge_agreement": 0.8962948630921362
+      }
+    }
+  ],
+  "uncovered_fraction": 0.0354
+}

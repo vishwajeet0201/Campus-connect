@@ -1,0 +1,76 @@
+{
+  "source": "/home/user/Campus-connect/map-source/mech-floor-2",
+  "image": "mech-2.png",
+  "size": [
+    2286,
+    994
+  ],
+  "tiles": [
+    {
+      "file": "Screenshot_20261007_131153.jpg",
+      "scale": 1.0,
+      "x": -26.0,
+      "y": -676.0,
+      "valid_px": 1795565,
+      "mismatch_fraction": 0.00021553104454586716,
+      "edge_coverage": 1.0
+    },
+    {
+      "file": "Screenshot_20261007_131159.jpg",
+      "scale": 0.74525,
+      "x": 850.0,
+      "y": -268.0,
+      "valid_px": 989061,
+      "mismatch_fraction": 0.00042464519377470144,
+      "edge_coverage": 1.0
+    },
+    {
+      "file": "Screenshot_20261007_131203.jpg",
+      "scale": 1.06683,
+      "x": 1328.45,
+      "y": -709.19,
+      "valid_px": 2028233,
+      "mismatch_fraction": 0.0004097162406883233,
+      "edge_coverage": 0.9914461147575694
+    }
+  ],
+  "seams": [
+    {
+      "from": "Screenshot_20261007_131153.jpg",
+      "to": "Screenshot_20261007_131159.jpg",
+      "status": "proven",
+      "scale": 0.74525,
+      "dx": 876,
+      "dy": 408,
+      "stats": {
+        "overlap_px": 190711,
+        "mismatch_fraction": 0.003203800514915238,
+        "mean_abs_diff": 0.9301875612838274,
+        "edges_a": 4435,
+        "edges_b": 4856,
+        "matched_edges": 4435,
+        "edge_agreement": 1.0
+      },
+      "sift_inliers": 37
+    },
+    {
+      "from": "Screenshot_20261007_131159.jpg",
+      "to": "Screenshot_20261007_131203.jpg",
+      "status": "proven",
+      "scale": 1.4315,
+      "dx": 642,
+      "dy": -592,
+      "stats": {
+        "overlap_px": 613771,
+        "mismatch_fraction": 0.0022060344982086154,
+        "mean_abs_diff": 0.5015649159051178,
+        "edges_a": 5001,
+        "edges_b": 6113,
+        "matched_edges": 4932,
+        "edge_agreement": 0.9930774186578357
+      },
+      "sift_inliers": 14
+    }
+  ],
+  "uncovered_fraction": 0.0035
+}

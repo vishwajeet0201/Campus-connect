@@ -1,0 +1,48 @@
+{
+  "source": "/home/user/Campus-connect/map-source/vjti-floor-2",
+  "image": "vjti-2.png",
+  "size": [
+    1697,
+    1509
+  ],
+  "tiles": [
+    {
+      "file": "Screenshot_20261007_131023.jpg",
+      "scale": 1.0,
+      "x": -29.0,
+      "y": -698.0,
+      "valid_px": 1795565,
+      "mismatch_fraction": 0.0,
+      "edge_coverage": 0.9950790606795238
+    },
+    {
+      "file": "Screenshot_20261007_131028.jpg",
+      "scale": 1.0,
+      "x": 722.0,
+      "y": -445.0,
+      "valid_px": 1795565,
+      "mismatch_fraction": 0.0,
+      "edge_coverage": 1.0
+    }
+  ],
+  "seams": [
+    {
+      "from": "Screenshot_20261007_131023.jpg",
+      "to": "Screenshot_20261007_131028.jpg",
+      "status": "proven",
+      "scale": 1.0,
+      "dx": 751,
+      "dy": 253,
+      "stats": {
+        "overlap_px": 381300,
+        "mismatch_fraction": 0.0,
+        "mean_abs_diff": 0.48905061631261476,
+        "edges_a": 8494,
+        "edges_b": 8374,
+        "matched_edges": 8244,
+        "edge_agreement": 0.9851738219132165
+      }
+    }
+  ],
+  "uncovered_fraction": 0.0307
+}

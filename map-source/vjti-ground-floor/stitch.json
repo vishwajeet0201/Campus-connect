@@ -1,0 +1,10 @@
+{
+  "pinned": {
+    "5.jpg->6.jpg": {
+      "dx": 713,
+      "dy": 20,
+      "refine": ["dy"],
+      "evidence": "Tile 6 shows only the uniform VJTI Hostels / path / Football Ground bands and their two labels, so pixels cannot fix its horizontal offset. dy is proven by residual: at dy=20 every overlapping pixel agrees (0 mismatches) and all six band edges coincide. dx=713 is the smallest offset consistent with: (a) neither label is visible in tile 5 (requires dx>=687); (b) labels are centred on their blocks (verified to +-1px on 30 single-label rooms of this floor); (c) the two blocks share their left edge at tile-5 x=614 and, being centred, their right edge must reach tile 6's right viewport edge (requires dx>=712.5). The blocks' true east edge is not visible in any screenshot."
+    }
+  }
+}
