@@ -8,7 +8,8 @@
     "start": "next start",
     "lint": "eslint",
     "test": "vitest run",
-    "maps:stitch": "python tools/stitch_all.py"
+    "maps:stitch": "python tools/mapstitch/stitch_all.py",
+    "maps:build": "python tools/mapstitch/build_floor.py public/maps/stitched/vjti-G.png map-source/vjti-ground-floor/labels.json --image-url /maps/stitched/vjti-G.png --out lib/maps/data/vjti-G.json"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.132.1",
