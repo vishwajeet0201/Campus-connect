@@ -211,7 +211,7 @@ button { cursor: pointer; }
 .plan-label { font-family: var(--font-ui); pointer-events: none; }
 .plan-room[data-named="true"], .plan-feature { cursor: pointer; }
 .plan-room[data-selected="true"] path { fill: color-mix(in srgb, var(--color-accent) 28%, #bfe4ff); stroke: var(--color-accent); stroke-width: 2.5px; }
-.plan-feature[data-selected="true"] rect { stroke: var(--color-accent); stroke-width: 2.5px; vector-effect: non-scaling-stroke; }
+.plan-feature[data-selected="true"] > rect, .plan-feature[data-selected="true"] > path { stroke: var(--color-accent); stroke-width: 2.5px; vector-effect: non-scaling-stroke; }
 .floor-plan [data-dim="true"] { opacity: 0.35; }
 .plan-route-casing { fill: none; stroke: #ffffff; stroke-width: 9px; stroke-linecap: round; stroke-linejoin: round; }
 .plan-route-line { fill: none; stroke: #146ef5; stroke-width: 5px; stroke-linecap: round; stroke-linejoin: round; opacity: 0.55; }

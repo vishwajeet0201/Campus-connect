@@ -1,10 +1,10 @@
 {
   "pinned": {
     "5.jpg->6.jpg": {
-      "dx": 713,
+      "dx": 837,
       "dy": 20,
       "refine": ["dy"],
-      "evidence": "Tile 6 shows only the uniform VJTI Hostels / path / Football Ground bands and their two labels, so pixels cannot fix its horizontal offset. dy is proven by residual: at dy=20 every overlapping pixel agrees (0 mismatches) and all six band edges coincide. dx=713 is the smallest offset consistent with: (a) neither label is visible in tile 5 (requires dx>=687); (b) labels are centred on their blocks (verified to +-1px on 30 single-label rooms of this floor); (c) the two blocks share their left edge at tile-5 x=614 and, being centred, their right edge must reach tile 6's right viewport edge (requires dx>=712.5). The blocks' true east edge is not visible in any screenshot."
+      "evidence": "Tile 6 shows only the uniform VJTI Hostels / path / Football Ground bands and their labels, and no screenshot shows those blocks' west edge (tile 5 x=614) together with anything east of it, so pixels cannot fix this seam's horizontal offset. dy is proven by residual (dy=20: every overlapping pixel agrees, all band edges coincide). dx is estimated from label placement: Screenshot_20261009_213957 (proven seam to tile 6, scale 2.009) shows both blocks' east edges, at tile-6 x=1170.2 (Hostels) and 1172.3 (Football Ground). If each label were centred on its block, the offset would be 827.7 (from 'VJTI Hostels') or 846.8 (from 'Football Ground'); dx=837 is their mean. The two disagree by 19px, and labels on wide features in this app sit left of centre (Cricket Ground: ~54px at this zoom; Textile Hall, Towards Mech Building: 10-17px), which would make the true offset larger, so treat dx as 837 +-30px. Hard bounds from pixels: dx >= 687 (neither label is visible in tile 5). A screenshot showing the hostel block's west edge and its label together would prove it."
     }
   }
 }

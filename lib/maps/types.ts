@@ -52,7 +52,8 @@ export type PlanDoor = { x: number; y: number; w: number; h: number; orientation
 
 export type PlanStairs = { id: string; bbox: [number, number, number, number]; rings: Ring[]; node?: number | null };
 
-export type PlanGate = { id: string; name: string; aliases: string[]; bbox: [number, number, number, number]; node: number; label: { x: number; y: number; size: number } };
+/** A gate marker; tall markers carry their label rotated (`rotate` degrees, clockwise). */
+export type PlanGate = { id: string; name: string; aliases: string[]; bbox: [number, number, number, number]; node: number; label: { x: number; y: number; size: number; rotate?: number } };
 
 export type PlanPlace = {
   id: string;
@@ -64,6 +65,8 @@ export type PlanPlace = {
   node: number;
   area?: "field" | "garden";
   bbox?: [number, number, number, number];
+  /** Outline of a field or garden (its bbox is only the bounds). */
+  rings?: Ring[];
   label?: { x: number; y: number; size: number; lines: string[] };
   inferredEntrances?: { side: Side; x: number; y: number }[];
   unseenEdges?: Side[];

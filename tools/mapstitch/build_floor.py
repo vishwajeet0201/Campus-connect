@@ -25,7 +25,6 @@ Usage:
 from __future__ import annotations
 
 import argparse
-import heapq
 import json
 import math
 import sys
@@ -36,7 +35,7 @@ import numpy as np
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from mapstitch.vectorize import CLASSES, INK, MIXED, extract  # noqa: E402
+from mapstitch.vectorize import CLASSES, INK, MIXED, extract, fill_holes, polygon  # noqa: E402
 
 CLEARANCE = 9
 OUTDOOR_COST = 1.3
@@ -169,6 +168,18 @@ def label_from_ink(cls: np.ndarray, room_mask: np.ndarray, n_lines: int):
     return {"x": round(float(x0 + x1) / 2, 1), "y": round(float(y0 + y1) / 2, 1), "size": round(float(min(max(size, 7), 40)), 1)}
 
 
+def gate_label(rgb: np.ndarray, box: list[int]) -> dict:
+    """Centre, font size (from the height of the label's own white ink) and
+    rotation of a gate's label. Gate markers taller than wide carry their
+    label rotated to read top to bottom, as in the source map."""
+    x, y, w, h = box
+    vertical = h > w
+    ink = rgb[y + 3:y + h - 3, x + 3:x + w - 3].min(axis=2) > 160
+    across = np.flatnonzero(ink.any(axis=0 if vertical else 1))
+    size = (across[-1] - across[0] + 1) / 0.95 if across.size else min(w, h) * 0.56
+    return {"x": x + w / 2, "y": y + h / 2, "size": round(float(size), 1), **({"rotate": 90} if vertical else {})}
+
+
 def main() -> int:
     ap = argparse.ArgumentParser()
     ap.add_argument("image", type=Path)
@@ -179,13 +190,13 @@ def main() -> int:
     args = ap.parse_args()
 
     feats, cls, room_id = extract(args.image, with_maps=True)
+    rgb = cv2.imread(str(args.image), cv2.IMREAD_COLOR)
     labels = json.loads(args.labels.read_text())
     H, W = cls.shape
     indoor, outdoor, free_c, los = walk_masks(cls, room_id, feats["stairs"])
     problems: list[str] = []
 
     # --- rooms -----------------------------------------------------------
-    by_fid = {r["id"]: r for r in feats["rooms"]}
     named: dict[int, dict] = {}
     for entry in labels["rooms"]:
         x, y = entry["at"]
@@ -195,7 +206,6 @@ def main() -> int:
         if fid in named:
             raise SystemExit(f"labels {named[fid]['id']} and {entry['id']} both point at room {fid}")
         named[fid] = entry
-    passage_fids = set()
     rooms = []
     fid_to_index = {}
     for r in feats["rooms"]:
@@ -287,11 +297,17 @@ def main() -> int:
         x0, x1, y0, y1 = xs.min(), xs.max(), ys.min(), ys.max()
         ax, ay = nodes[anchor_node]["x"], nodes[anchor_node]["y"]
         found = []
+        # Sample each side on the shape's own boundary (its extreme pixel in
+        # each row or column), so stepped and slanted outlines work too.
+        cols = [int(round(x)) for x in np.linspace(x0, x1, 21)]
+        rows = [int(round(y)) for y in np.linspace(y0, y1, 21)]
+        col_ys = {x: np.flatnonzero(mask[:, x]) for x in cols}
+        row_xs = {y: np.flatnonzero(mask[y]) for y in rows}
         sides = {
-            "top": ([(x, y0) for x in np.linspace(x0, x1, 21)], (0, -1)),
-            "bottom": ([(x, y1) for x in np.linspace(x0, x1, 21)], (0, 1)),
-            "left": ([(x0, y) for y in np.linspace(y0, y1, 21)], (-1, 0)),
-            "right": ([(x1, y) for y in np.linspace(y0, y1, 21)], (1, 0)),
+            "top": ([(x, col_ys[x][0]) for x in cols if col_ys[x].size], (0, -1)),
+            "bottom": ([(x, col_ys[x][-1]) for x in cols if col_ys[x].size], (0, 1)),
+            "left": ([(row_xs[y][0], y) for y in rows if row_xs[y].size], (-1, 0)),
+            "right": ([(row_xs[y][-1], y) for y in rows if row_xs[y].size], (1, 0)),
         }
         for side, (points, (nx, ny)) in sides.items():
             # Prefer the middle of the side, then work outwards.
@@ -337,6 +353,7 @@ def main() -> int:
                 raise SystemExit(f"place {p['id']} anchor is not on its {p['area']}")
             ys, xs = np.nonzero(comp)
             place["bbox"] = [int(xs.min()), int(ys.min()), int(xs.max() - xs.min() + 1), int(ys.max() - ys.min() + 1)]
+            place["rings"] = polygon(fill_holes(np.pad(comp, 1))[1:-1, 1:-1])
             node = add_node(x, y, "place", p["id"])
             place["inferredEntrances"] = inferred_entrance(comp, node, p["id"])
         else:
@@ -354,10 +371,27 @@ def main() -> int:
         box = next((b["bbox"] for b in feats["gates"] if b["bbox"][0] <= x < b["bbox"][0] + b["bbox"][2] and b["bbox"][1] <= y < b["bbox"][1] + b["bbox"][3]), None)
         if box is None:
             raise SystemExit(f"gate {g['id']} anchor is not on a gate marker")
-        q = snap(free_c, box[0] + box[2] / 2, box[1] + box[3] / 2, 80)
+        # Gates are drawn on the campus boundary, long side along it: the node
+        # goes on walkable ground just inside, on the long side facing away
+        # from the nearer edge of the map.
+        bx, by, bw, bh = box
+        inside = np.zeros_like(free_c)
+        if bw >= bh:
+            inward = "bottom" if by < H - (by + bh) else "top"
+            mid = (bx + bw / 2, by + bh if inward == "bottom" else by)
+            inside[by + bh:] = inward == "bottom"
+            inside[:by] = inward == "top"
+        else:
+            inward = "right" if bx < W - (bx + bw) else "left"
+            mid = (bx + bw if inward == "right" else bx, by + bh / 2)
+            inside[:, bx + bw:] = inward == "right"
+            inside[:, :bx] = inward == "left"
+        q = snap(free_c & inside, *mid, 80)
+        if q is None:
+            raise SystemExit(f"gate {g['id']} has no walkable ground on its {inward} side")
         node = add_node(*q, "gate", g["id"])
         walk_nodes.append((node, None))
-        gates.append({**{k: v for k, v in g.items() if k != "at"}, "bbox": box, "node": node, "label": {"x": box[0] + box[2] / 2, "y": box[1] + box[3] / 2, "size": round(box[3] * 0.56, 1)}})
+        gates.append({**{k: v for k, v in g.items() if k != "at"}, "bbox": box, "node": node, "label": gate_label(rgb, box)})
 
     stairs = []
     stair_nodes: list[int] = []

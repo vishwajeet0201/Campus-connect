@@ -16,7 +16,7 @@
     { "at": [2532, 388], "id": "coe-lab", "lines": ["COE", "LAB"], "category": "lab", "aliases": ["centre of excellence", "center of excellence"] },
     { "at": [1224, 471], "id": "plumbing-lab", "lines": ["Plumbing", "Lab"], "category": "lab", "aliases": [] },
     { "at": [2867, 506], "id": "control-dynamics-lab", "lines": ["Control", "Dynamics Lab"], "category": "lab", "aliases": [] },
-    { "at": [3756, 658], "id": "vjti-hostels", "lines": ["VJTI Hostels"], "category": "building", "aliases": ["hostel", "hostels"], "unseenEdges": ["right"] },
+    { "at": [3756, 658], "id": "vjti-hostels", "lines": ["VJTI Hostels"], "category": "building", "aliases": ["hostel", "hostels"] },
     { "at": [1769, 608], "id": "boys-washroom", "lines": ["Boys", "Washroom"], "category": "washroom_men", "aliases": ["boys toilet", "gents toilet", "mens washroom", "men's toilet", "boys bathroom"] },
     { "at": [1195, 626], "id": "transportation-lab", "lines": ["Transportation", "Engineering Lab"], "category": "lab", "aliases": ["transport lab"] },
     { "at": [2386, 614], "id": "girls-washroom", "lines": ["Girls", "Washroom"], "category": "washroom_women", "aliases": ["girls toilet", "ladies toilet", "womens washroom", "women's toilet", "girls bathroom"] },
@@ -60,12 +60,14 @@
   "places": [
     { "at": [2037, 859], "id": "vjti-quad", "name": "VJTI Quad", "label": { "x": 2037, "y": 859, "size": 20, "lines": ["VJTI Quad ♥"] }, "category": "open", "aliases": ["quad", "quadrangle", "courtyard"] },
     { "at": [2630, 1331], "id": "study-space", "name": "Study Space", "label": { "x": 2630, "y": 1331, "size": 15.5, "lines": ["Study", "Space"] }, "category": "open", "aliases": ["study area", "reading area"] },
-    { "at": [3500, 1000], "id": "football-ground", "name": "Football Ground", "label": { "x": 3739, "y": 1232, "size": 18, "lines": ["Football Ground"] }, "category": "sports", "area": "field", "aliases": ["ground", "football field", "playground", "sports ground"], "unseenEdges": ["right"] },
+    { "at": [3500, 1000], "id": "football-ground", "name": "Football Ground", "label": { "x": 3877, "y": 1230, "size": 23, "lines": ["Football Ground"] }, "category": "sports", "area": "field", "aliases": ["football field", "football"] },
+    { "at": [5310, 1153], "id": "cricket-ground", "name": "Cricket Ground", "label": { "x": 5256, "y": 1230, "size": 23, "lines": ["Cricket Ground"] }, "category": "sports", "area": "field", "aliases": ["cricket field", "cricket"] },
     { "at": [1250, 1700], "id": "textile-garden", "name": "Textile Garden", "label": { "x": 924, "y": 1749, "size": 29, "lines": ["Textile Garden"] }, "category": "garden", "area": "garden", "aliases": ["garden"], "unseenEdges": ["bottom"] }
   ],
   "gates": [
     { "at": [221, 45], "id": "mechanical-gate", "name": "Mechanical Gate", "aliases": ["mech gate"] },
     { "at": [1898, 1788], "id": "main-gate", "name": "Main Gate", "aliases": ["main entrance"] },
-    { "at": [3064, 1760], "id": "gate-3", "name": "Gate 3", "aliases": ["gate three"] }
+    { "at": [3064, 1760], "id": "gate-3", "name": "Gate 3", "aliases": ["gate three"] },
+    { "at": [6166, 800], "id": "gate-5", "name": "Gate 5", "aliases": ["gate five"] }
   ]
 }

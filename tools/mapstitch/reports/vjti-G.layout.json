@@ -2,7 +2,7 @@
   "source": "/home/user/Campus-connect/map-source/vjti-ground-floor",
   "image": "vjti-G.png",
   "size": [
-    4353,
+    6225,
     1835
   ],
   "tiles": [
@@ -49,15 +49,33 @@
       "y": -315.0,
       "valid_px": 1795565,
       "mismatch_fraction": 0.00035197834664854794,
-      "edge_coverage": 0.9923866687727058
+      "edge_coverage": 0.9957668614752804
     },
     {
       "file": "6.jpg",
       "scale": 1.0,
-      "x": 3283.0,
+      "x": 3407.0,
       "y": -295.0,
       "valid_px": 1795565,
       "mismatch_fraction": 0.0,
+      "edge_coverage": 1.0
+    },
+    {
+      "file": "Screenshot_20261009_213957.jpg",
+      "scale": 2.00904,
+      "x": 3469.28,
+      "y": -1424.08,
+      "valid_px": 7221789,
+      "mismatch_fraction": 0.0010425394594054188,
+      "edge_coverage": 0.8483320729350474
+    },
+    {
+      "file": "Screenshot_20261009_214000.jpg",
+      "scale": 2.00904,
+      "x": 4588.32,
+      "y": -1542.61,
+      "valid_px": 7219838,
+      "mismatch_fraction": 3.739696098444314e-06,
       "edge_coverage": 1.0
     }
   ],
@@ -135,22 +153,62 @@
       "to": "6.jpg",
       "status": "constrained",
       "scale": 1.0,
-      "dx": 713,
+      "dx": 837,
       "dy": 20,
-      "evidence": "Tile 6 shows only the uniform VJTI Hostels / path / Football Ground bands and their two labels, so pixels cannot fix its horizontal offset. dy is proven by residual: at dy=20 every overlapping pixel agrees (0 mismatches) and all six band edges coincide. dx=713 is the smallest offset consistent with: (a) neither label is visible in tile 5 (requires dx>=687); (b) labels are centred on their blocks (verified to +-1px on 30 single-label rooms of this floor); (c) the two blocks share their left edge at tile-5 x=614 and, being centred, their right edge must reach tile 6's right viewport edge (requires dx>=712.5). The blocks' true east edge is not visible in any screenshot.",
+      "evidence": "Tile 6 shows only the uniform VJTI Hostels / path / Football Ground bands and their labels, and no screenshot shows those blocks' west edge (tile 5 x=614) together with anything east of it, so pixels cannot fix this seam's horizontal offset. dy is proven by residual (dy=20: every overlapping pixel agrees, all band edges coincide). dx is estimated from label placement: Screenshot_20261009_213957 (proven seam to tile 6, scale 2.009) shows both blocks' east edges, at tile-6 x=1170.2 (Hostels) and 1172.3 (Football Ground). If each label were centred on its block, the offset would be 827.7 (from 'VJTI Hostels') or 846.8 (from 'Football Ground'); dx=837 is their mean. The two disagree by 19px, and labels on wide features in this app sit left of centre (Cricket Ground: ~54px at this zoom; Textile Hall, Towards Mech Building: 10-17px), which would make the true offset larger, so treat dx as 837 +-30px. Hard bounds from pixels: dx >= 687 (neither label is visible in tile 5). A screenshot showing the hostel block's west edge and its label together would prove it.",
       "refined_axes": [
         "dy"
       ],
       "stats": {
-        "overlap_px": 508822,
+        "overlap_px": 298424,
         "mismatch_fraction": 0.0,
-        "mean_abs_diff": 0.133402250688846,
-        "edges_a": 1495,
-        "edges_b": 1497,
-        "matched_edges": 1201,
-        "edge_agreement": 0.8962948630921362
+        "mean_abs_diff": 0.14144639841299628,
+        "edges_a": 875,
+        "edges_b": 877,
+        "matched_edges": 705,
+        "edge_agreement": 0.8976158898517148
+      }
+    },
+    {
+      "from": "6.jpg",
+      "to": "Screenshot_20261009_213957.jpg",
+      "status": "proven",
+      "scale": 2.0090406830738323,
+      "dx": 62.2802611752888,
+      "dy": -1129.0808638874937,
+      "stats": {
+        "overlap_px": 401178,
+        "mismatch_fraction": 0.001984156658640304,
+        "mean_abs_diff": 0.8223083020504613,
+        "edges_a": 3611,
+        "edges_b": 4452,
+        "matched_edges": 3611,
+        "edge_agreement": 0.9474038864123465
+      },
+      "sift_inliers": 23,
+      "verified_in": "the zoomed-out tile's frame"
+    },
+    {
+      "from": "Screenshot_20261009_213957.jpg",
+      "to": "Screenshot_20261009_214000.jpg",
+      "status": "proven",
+      "scale": 1.0,
+      "dx": 557,
+      "dy": -59,
+      "stats": {
+        "overlap_px": 775402,
+        "mismatch_fraction": 7.608956386493716e-05,
+        "mean_abs_diff": 0.3378634566328176,
+        "edges_a": 2200,
+        "edges_b": 3157,
+        "matched_edges": 2196,
+        "edge_agreement": 0.9990904954916837
       }
     }
   ],
-  "uncovered_fraction": 0.0354
+  "uncovered_fraction": 0.0175,
+  "resampled_tiles": {
+    "Screenshot_20261009_213957.jpg": "received at 923x2000, resampled to 1080x2340",
+    "Screenshot_20261009_214000.jpg": "received at 923x2000, resampled to 1080x2340"
+  }
 }

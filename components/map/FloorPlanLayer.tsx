@@ -66,10 +66,10 @@ function UnseenEdges({ id, box, sides }: { id: string; box: [number, number, num
   })}</>;
 }
 
-function Label({ x, y, size, lines, color = PLAN_COLORS.ink, weight = 400 }: { x: number; y: number; size: number; lines: string[]; color?: string; weight?: number }) {
+function Label({ x, y, size, lines, color = PLAN_COLORS.ink, weight = 400, rotate }: { x: number; y: number; size: number; lines: string[]; color?: string; weight?: number; rotate?: number }) {
   const lead = size * 1.22;
   const top = y - ((lines.length - 1) * lead) / 2;
-  return <text className="plan-label" x={x} y={top} fontSize={size} fill={color} fontWeight={weight} textAnchor="middle" dominantBaseline="central">
+  return <text className="plan-label" x={x} y={top} fontSize={size} fill={color} fontWeight={weight} textAnchor="middle" dominantBaseline="central" transform={rotate ? `rotate(${rotate} ${x} ${y})` : undefined}>
     {lines.map((line, i) => <tspan key={i} x={x} y={top + i * lead}>{line.endsWith(" ♥") ? <>{line.slice(0, -2)} <tspan fill="#e0245e">♥</tspan></> : line}</tspan>)}
   </text>;
 }
@@ -102,8 +102,9 @@ export const FloorPlanLayer = memo(function FloorPlanLayer({
       const [x, y, w, h] = place.bbox!;
       const selected = selectedId === place.id;
       const dim = highlight && !highlight.has(place.category);
+      const fill = place.area === "garden" ? PLAN_COLORS.garden : PLAN_COLORS.field;
       return <g key={place.id} data-feature={place.id} role="button" aria-label={place.name} className="plan-feature" data-selected={selected || undefined} data-dim={dim || undefined}>
-        <rect x={x} y={y} width={w} height={h} fill={place.area === "garden" ? PLAN_COLORS.garden : PLAN_COLORS.field} />
+        {place.rings ? <path d={ringPath(place.rings)} fill={fill} /> : <rect x={x} y={y} width={w} height={h} fill={fill} />}
         {place.unseenEdges && <UnseenEdges id={place.id} box={place.bbox!} sides={place.unseenEdges} />}
       </g>;
     })}
@@ -132,8 +133,9 @@ export const FloorPlanLayer = memo(function FloorPlanLayer({
       return <g key={g.id} data-feature={g.id} role="button" aria-label={g.name} className="plan-feature" data-selected={selectedId === g.id || undefined}>
         <rect x={x} y={y} width={w} height={h} fill={PLAN_COLORS.gate} />
         {(() => {
-          const size = fitLabel([g.name], g.label.size, { w, h }, scale);
-          return size && <Label x={g.label.x} y={g.label.y} size={size} lines={[g.name]} color="#ffffff" />;
+          const turned = g.label.rotate === 90 || g.label.rotate === -90;
+          const size = fitLabel([g.name], g.label.size, turned ? { w: h, h: w } : { w, h }, scale);
+          return size && <Label x={g.label.x} y={g.label.y} size={size} lines={[g.name]} color="#ffffff" rotate={g.label.rotate} />;
         })()}
       </g>;
     })}
