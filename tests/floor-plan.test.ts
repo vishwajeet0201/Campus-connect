@@ -1,5 +1,6 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
-import { VJTI_GROUND } from "@/lib/maps";
+import { VJTI_GROUND, imageFor } from "@/lib/maps";
 import { destinations, planRoute } from "@/lib/maps/routing";
 import type { PlanRoom, Point } from "@/lib/maps/types";
 
@@ -51,9 +52,27 @@ describe("VJTI ground floor plan data", () => {
     expect(named.map((r) => r.name)).toEqual(expect.arrayContaining(["VJTI SIMENS AICTE High Voltage Lab", "Director's Bunglow", "Dr. Suranjana Gangopadhyay", "Dr. Sudhir K. Bhil & Prof. Rahul Ingale"]));
   });
 
-  it("has three gates and the open places", () => {
-    expect(plan.gates.map((g) => g.id).sort()).toEqual(["gate-3", "main-gate", "mechanical-gate"]);
-    expect(plan.places.map((p) => p.id).sort()).toEqual(["football-ground", "study-space", "textile-garden", "vjti-quad"]);
+  it("has four gates and the open places", () => {
+    expect(plan.gates.map((g) => g.id).sort()).toEqual(["gate-3", "gate-5", "main-gate", "mechanical-gate"]);
+    expect(plan.places.map((p) => p.id).sort()).toEqual(["cricket-ground", "football-ground", "study-space", "textile-garden", "vjti-quad"]);
+  });
+
+  it("starts every gate's walk on the ground just inside its marker", () => {
+    for (const g of plan.gates) {
+      const [x, y, w, h] = g.bbox;
+      const [nx, ny] = plan.nav.nodes[g.node];
+      const outside = Math.max(x - nx, nx - (x + w), y - ny, ny - (y + h));
+      expect(outside, g.id).toBeGreaterThan(0);
+      // Clearance from the marker plus its outline (thicker where the source tile was upsampled).
+      expect(outside, g.id).toBeLessThanOrEqual(plan.nav.clearance + 6);
+    }
+    // The tall Gate 5 marker carries its label rotated, as in the source.
+    expect(plan.gates.find((g) => g.id === "gate-5")!.label.rotate).toBe(90);
+  });
+
+  it("matches the size of the stitched image it was drawn from", () => {
+    const report = JSON.parse(readFileSync("tools/mapstitch/reports/vjti-G.layout.json", "utf8"));
+    expect([plan.floor.width, plan.floor.height]).toEqual(report.size);
   });
 
   it("only links doors to rooms that exist", () => {
@@ -117,6 +136,24 @@ describe("routes on the VJTI ground floor", () => {
         expect(step.start).toBeLessThanOrEqual(step.end);
       }
       expect(route.steps.at(-1)!.text).toMatch(/You have arrived|You are already/);
+    }
+  });
+});
+
+describe("stitched floor images", () => {
+  const floors: [string, string, string][] = [
+    ["VJTI", "1", "vjti-1"], ["VJTI", "2", "vjti-2"], ["VJTI", "3", "vjti-3"],
+    ["MECH", "G", "mech-G"], ["MECH", "1", "mech-1"], ["MECH", "2", "mech-2"], ["MECH", "3", "mech-3"], ["MECH", "TPO", "mech-TPO"],
+  ];
+
+  it("are registered at the size their verification report gives", () => {
+    for (const [building, floor, name] of floors) {
+      const report = JSON.parse(readFileSync(`tools/mapstitch/reports/${name}.layout.json`, "utf8"));
+      const image = imageFor(building, floor);
+      expect(image?.src, name).toBe(`/maps/stitched/${name}.png`);
+      expect([image?.width, image?.height], name).toEqual(report.size);
+      // A floor is only complete when no tile had to be left out.
+      expect(Boolean(image?.partial), name).toBe(Boolean(report.excluded_tiles));
     }
   });
 });
