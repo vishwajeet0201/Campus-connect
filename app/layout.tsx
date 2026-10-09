@@ -5,7 +5,7 @@ import "./globals.css";
 const inter = Inter({ subsets: ["latin"], variable: "--font-inter" });
 
 export const metadata: Metadata = {
-  title: "CampusGlass | VJTI",
+  title: "CampusConnect | VJTI",
   description: "A college-only campus network for VJTI students.",
 };
 
@@ -16,5 +16,5 @@ export const viewport: Viewport = {
 };
 
 export default function RootLayout({ children }: LayoutProps<"/">) {
-  return <html lang="en" className={inter.variable}><body><svg className="glass-filter-defs" aria-hidden="true"><defs><filter id="glass-displacement"><feTurbulence type="fractalNoise" baseFrequency="0.012" numOctaves="2" seed="4" result="noise" /><feDisplacementMap in="SourceGraphic" in2="noise" scale="2" /></filter></defs></svg>{children}</body></html>;
+  return <html lang="en" className={inter.variable}><body suppressHydrationWarning><svg className="glass-filter-defs" aria-hidden="true"><defs><filter id="glass-displacement"><feTurbulence type="fractalNoise" baseFrequency="0.012" numOctaves="2" seed="4" result="noise" /><feDisplacementMap in="SourceGraphic" in2="noise" scale="2" /></filter></defs></svg>{children}</body></html>;
 }

@@ -1,5 +1,8 @@
 export type Floor = {
   id: string;
+  building_id?: string;
+  building_code?: string;
+  building_name?: string;
   code: string;
   name: string;
   sort_order: number;
@@ -7,6 +10,9 @@ export type Floor = {
   width: number;
   height: number;
 };
+
+export const VJTI_GROUND_FLOOR_WIDTH = 6072;
+export const VJTI_GROUND_FLOOR_HEIGHT = 1510;
 
 export type PoiCategory = {
   id: string;
@@ -18,6 +24,9 @@ export type PoiCategory = {
 export type CampusPoi = {
   id: string;
   floor_id: string;
+  building_id?: string;
+  building_code?: string;
+  building_name?: string;
   category_id: string;
   name: string;
   description?: string | null;
@@ -29,6 +38,15 @@ export type CampusPoi = {
   category?: string;
   floor_code?: string;
 };
+
+export function floorLookup(floors: Floor[], buildingCode: string, floorCode: string) {
+  return floors.find((floor) => floor.building_code === buildingCode && floor.code === floorCode) ?? null;
+}
+
+export function formatPoiLocation(poi: Pick<CampusPoi, "building_name" | "building_code" | "floor_code">) {
+  const building = poi.building_name ?? poi.building_code ?? "Campus";
+  return `${building}, ${poi.floor_code ?? "Unknown floor"}`;
+}
 
 export type StoryItem = {
   id: string;

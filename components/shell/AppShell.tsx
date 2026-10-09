@@ -1,19 +1,23 @@
 "use client";
 
 import { AnimatePresence, motion } from "framer-motion";
-import { Bell, CalendarDays, ChevronRight, Clock3, Home, MessageCircle, Navigation, Network, Pause, Search, SlidersHorizontal, Upload, UserRound, Verified, X } from "lucide-react";
+import { Bell, CalendarDays, ChevronRight, Clock3, Home, MessageCircle, Navigation, Network, Pause, Search, SlidersHorizontal, Trash2, Upload, UserRound, Verified, X } from "lucide-react";
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
+import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/browser";
 import { GlassBar, GlassButton, GlassCard, GlassInput } from "@/components/glass";
 import { CampusMapViewer, type MapFloor, type MapPoi } from "@/components/map/CampusMapViewer";
 import { BottomTabBar } from "@/components/navigation/BottomTabBar";
-import { extractStoryMediaPath, getStoryErrorMessage, isStoryExpired, rankPoiSearch, type StoryItem } from "@/lib/campus";
+import { VoiceAssistant } from "@/components/navigation/VoiceAssistant";
+import type { NavRoute } from "@/lib/navigation";
+import { extractStoryMediaPath, formatPoiLocation, getStoryErrorMessage, isStoryExpired, rankPoiSearch, VJTI_GROUND_FLOOR_HEIGHT, VJTI_GROUND_FLOOR_WIDTH, type StoryItem } from "@/lib/campus";
 
 const floors: MapFloor[] = [
-  { id: "g", code: "G", name: "Ground Floor", sort_order: 0, svg_path: "/maps/floor-G.svg", width: 1600, height: 1000 },
-  { id: "1", code: "1", name: "First Floor", sort_order: 1, svg_path: "/maps/floor-1.svg", width: 1600, height: 1000 },
-  { id: "2", code: "2", name: "Second Floor", sort_order: 2, svg_path: "/maps/floor-2.svg", width: 1600, height: 1000 },
+  { id: "g", building_code: "VJTI", building_name: "VJTI main building", code: "G", name: "Ground Floor", sort_order: 0, svg_path: "", width: VJTI_GROUND_FLOOR_WIDTH, height: VJTI_GROUND_FLOOR_HEIGHT },
+  { id: "1", building_code: "VJTI", building_name: "VJTI main building", code: "1", name: "First Floor", sort_order: 1, svg_path: "/maps/vjti-1.svg", width: 1600, height: 1000 },
+  { id: "2", building_code: "VJTI", building_name: "VJTI main building", code: "2", name: "Second Floor", sort_order: 2, svg_path: "/maps/vjti-2.svg", width: 1600, height: 1000 },
+  { id: "3", building_code: "VJTI", building_name: "VJTI main building", code: "3", name: "Third Floor", sort_order: 3, svg_path: "/maps/vjti-3.svg", width: 1600, height: 1000 },
 ];
 
 const poiSeed: MapPoi[] = [
@@ -55,13 +59,6 @@ const poiSeed: MapPoi[] = [
   { id: "poi-36", floor_id: "2", category_id: "cat-ramp", name: "Accessible Route", description: "Ramp to common area", room_code: "2-503", x: 960, y: 760, opening_hours: null, is_accessible: true, category: "ramp", floor_code: "2" },
 ];
 
-const storySeed: StoryItem[] = [
-  { id: "story-your", author_id: "me", author: "You", kind: "student", media_path: null, media_url: "/images/story-1.jpg", media_type: "image", caption: "My favourite spot on campus before lecture block.", created_at: new Date(Date.now() - 1000 * 60 * 18).toISOString(), expires_at: new Date(Date.now() + 1000 * 60 * 60 * 22).toISOString(), seen: false, verified: false },
-  { id: "story-aarav", author_id: "aarav", author: "Aarav", kind: "student", media_path: null, media_url: "/images/story-2.jpg", media_type: "image", caption: "Campus sunrise from the robotics lab.", created_at: new Date(Date.now() - 1000 * 60 * 30).toISOString(), expires_at: new Date(Date.now() + 1000 * 60 * 60 * 18).toISOString(), seen: false, verified: false },
-  { id: "story-committee", author_id: "committee", author: "Student Council", kind: "committee", media_path: null, media_url: "/images/story-3.jpg", media_type: "image", caption: "Orientation week schedule is live.", created_at: new Date(Date.now() - 1000 * 60 * 50).toISOString(), expires_at: new Date(Date.now() + 1000 * 60 * 60 * 9).toISOString(), seen: true, verified: true },
-  { id: "story-official", author_id: "official", author: "Campus Admin", kind: "official", media_path: null, media_url: "/images/story-4.jpg", media_type: "image", caption: "Safety reminder: Library annex closes at 18:30.", created_at: new Date(Date.now() - 1000 * 60 * 70).toISOString(), expires_at: new Date(Date.now() + 1000 * 60 * 60 * 10).toISOString(), seen: false, verified: true },
-];
-
 const filterOptions = [
   { label: "All", value: "all" },
   { label: "Classrooms", value: "classroom" },
@@ -73,16 +70,40 @@ const filterOptions = [
 ];
 
 export function AppShell() {
+  const router = useRouter();
   const [activeTab, setActiveTab] = useState("Home");
+  const [buildings, setBuildings] = useState<{ id: string; code: string; name: string; sort_order: number }[]>([
+    { id: "vjti", code: "VJTI", name: "VJTI main building", sort_order: 0 },
+    { id: "mech", code: "MECH", name: "Mechanical building", sort_order: 1 },
+  ]);
+  const [mapFloors, setMapFloors] = useState<MapFloor[]>(floors);
+  const [mapPois, setMapPois] = useState<MapPoi[]>(poiSeed);
+  const [activeBuildingCode, setActiveBuildingCode] = useState("VJTI");
   const [activeFloorId, setActiveFloorId] = useState(floors[0].id);
   const [query, setQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [selectedPoi, setSelectedPoi] = useState<MapPoi | null>(null);
+  const [focusPoiId, setFocusPoiId] = useState<string | null>(null);
   const [isPanning, setIsPanning] = useState(false);
+  const [assistantOpen, setAssistantOpen] = useState(false);
+  const [navRoute, setNavRoute] = useState<{ nodeIds: string[]; step: number } | null>(null);
+  const handleRouteChange = useCallback((route: NavRoute | null, step: number) => setNavRoute(route ? { nodeIds: route.nodeIds, step } : null), []);
+  // Publishes the filter row's bottom edge as --home-chips-bottom so the ground-floor map can sit just below it.
+  const filterRowRef = useCallback((row: HTMLDivElement | null) => {
+    const shell = row?.closest<HTMLElement>(".home-shell");
+    if (!row || !shell) return;
+    const update = () => shell.style.setProperty("--home-chips-bottom", `${row.getBoundingClientRect().bottom - shell.getBoundingClientRect().top}px`);
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(row);
+    observer.observe(shell);
+    return () => observer.disconnect();
+  }, []);
   const [storyIndex, setStoryIndex] = useState<number | null>(null);
   const [reportOpen, setReportOpen] = useState(false);
-  const [stories, setStories] = useState<StoryItem[]>(storySeed);
+  const [stories, setStories] = useState<StoryItem[]>([]);
   const [storyFailures, setStoryFailures] = useState<Record<string, boolean>>({});
+  const [removingStory, setRemovingStory] = useState(false);
   const [composerOpen, setComposerOpen] = useState(false);
   const [caption, setCaption] = useState("");
   const [storyError, setStoryError] = useState("");
@@ -90,15 +111,23 @@ export function AppShell() {
   const timerRef = useRef<number | null>(null);
   const refreshAttemptsRef = useRef<Record<string, number>>({});
   const supabase = useMemo(() => createClient(), []);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
-  const activeFloor = floors.find((floor) => floor.id === activeFloorId) ?? floors[0];
+  const activeBuildingFloors = mapFloors.filter((floor) => floor.building_code === activeBuildingCode).sort((a, b) => a.sort_order - b.sort_order);
   const searchResults = useMemo(() => {
     if (!query.trim()) return [];
-    return rankPoiSearch(query, poiSeed.filter((poi) => poi.floor_id === activeFloorId)).slice(0, 5);
-  }, [activeFloorId, query]);
+    return rankPoiSearch(query, mapPois).slice(0, 5);
+  }, [mapPois, query]);
 
   const activeStories = useMemo(() => stories.filter((story) => !isStoryExpired(story)), [stories]);
   const currentStory = storyIndex == null ? null : activeStories[storyIndex] ?? null;
+  const storyGroups = useMemo(() => {
+    const groups = new Map<string, StoryItem>();
+    for (const story of activeStories) {
+      if (!groups.has(story.author_id)) groups.set(story.author_id, story);
+    }
+    return [...groups.values()];
+  }, [activeStories]);
 
   const signStories = useCallback(async (items: StoryItem[]) => {
     const paths = items.map((story) => story.media_path ?? extractStoryMediaPath(story.media_url)).filter((path): path is string => Boolean(path));
@@ -116,6 +145,55 @@ export function AppShell() {
   }, [supabase]);
 
   useEffect(() => {
+    void supabase.auth.getUser().then(({ data: { user } }) => setCurrentUserId(user?.id ?? null));
+  }, [supabase]);
+
+  useEffect(() => {
+    let cancelled = false;
+    async function loadMapData() {
+      const [{ data: buildingRows }, { data: floorRows }, { data: poiRows }] = await Promise.all([
+        supabase.from("buildings").select("id,code,name,sort_order").order("sort_order"),
+        supabase.from("floors").select("id,building_id,code,name,sort_order,svg_path,width,height,building:buildings(code,name)").order("sort_order"),
+        supabase.from("pois").select("id,floor_id,building_id,category_id,name,description,room_code,x,y,opening_hours,is_accessible,category:poi_categories(code),floor:floors(code,building:buildings(code,name))"),
+      ]);
+      if (cancelled) return;
+      if (buildingRows?.length) setBuildings(buildingRows as typeof buildings);
+      if (floorRows?.length) {
+        const nextFloors = floorRows.map((row) => {
+          const building = Array.isArray(row.building) ? row.building[0] : row.building;
+          const isVjtiGroundFloor = building?.code === "VJTI" && row.code === "G";
+          return {
+            ...row,
+            building_code: building?.code,
+            building_name: building?.name,
+            ...(isVjtiGroundFloor ? {
+              svg_path: "",
+              width: VJTI_GROUND_FLOOR_WIDTH,
+              height: VJTI_GROUND_FLOOR_HEIGHT,
+            } : {}),
+          } as MapFloor;
+        });
+        setMapFloors(nextFloors);
+        const storedBuilding = window.localStorage.getItem("campus-building");
+        const initialBuilding = (buildingRows?.find((building) => building.code === storedBuilding) ?? buildingRows?.[0]) as { code: string } | undefined;
+        const initialFloor = nextFloors.find((floor) => floor.building_code === initialBuilding?.code && floor.code === "G") ?? nextFloors[0];
+        if (initialBuilding) setActiveBuildingCode(initialBuilding.code);
+        if (initialFloor) setActiveFloorId(initialFloor.id);
+      }
+      if (poiRows?.length) {
+        setMapPois(poiRows.map((row) => {
+          const floor = Array.isArray(row.floor) ? row.floor[0] : row.floor;
+          const building = floor && (Array.isArray(floor.building) ? floor.building[0] : floor.building);
+          const category = Array.isArray(row.category) ? row.category[0] : row.category;
+          return { ...row, x: Number(row.x), y: Number(row.y), category: category?.code, floor_code: floor?.code, building_code: building?.code, building_name: building?.name } as MapPoi;
+        }));
+      }
+    }
+    void loadMapData();
+    return () => { cancelled = true; };
+  }, [supabase]);
+
+  useEffect(() => {
     let cancelled = false;
     async function loadStories() {
       const { data, error } = await supabase
@@ -127,13 +205,25 @@ export function AppShell() {
         if (process.env.NODE_ENV === "development") console.warn("Could not load stories:", error.message);
         return;
       }
-      const rows = (data ?? []).map((row) => ({
+      const authorIds = [...new Set((data ?? []).map((row) => row.author_id))];
+      const { data: profiles, error: profileError } = authorIds.length
+        ? await supabase.from("profiles").select("id,full_name,username,role").in("id", authorIds)
+        : { data: [], error: null };
+      if (profileError) {
+        if (process.env.NODE_ENV === "development") console.warn("Could not load story authors:", profileError.message);
+      }
+      const profileById = new Map((profiles ?? []).map((profile) => [profile.id, profile]));
+      const rows = (data ?? []).map((row) => {
+        const profile = profileById.get(row.author_id);
+        const author = profile?.full_name?.trim() || profile?.username?.trim() || "Student";
+        return {
         ...row,
-        author: row.author_id,
+        author,
         media_path: row.media_path ?? extractStoryMediaPath(row.media_url),
         seen: false,
-        verified: row.kind !== "student",
-      })) as StoryItem[];
+        verified: row.kind !== "student" || profile?.role === "committee" || profile?.role === "admin",
+        };
+      }) as StoryItem[];
       const signedStories = await signStories(rows);
       if (!cancelled) setStories(signedStories);
     }
@@ -154,8 +244,32 @@ export function AppShell() {
 
   const handleSearchSelect = (poi: MapPoi) => {
     setQuery("");
+    setFocusPoiId(poi.id);
+    setActiveBuildingCode(poi.building_code ?? "VJTI");
     setActiveFloorId(poi.floor_id);
     setSelectedPoi(poi);
+  };
+
+  const switchBuilding = (code: string) => {
+    const nextFloor = mapFloors.filter((floor) => floor.building_code === code).sort((a, b) => a.sort_order - b.sort_order).find((floor) => floor.code === "G");
+    setActiveBuildingCode(code);
+    window.localStorage.setItem("campus-building", code);
+    if (nextFloor) setActiveFloorId(nextFloor.id);
+    setSelectedPoi(null);
+  };
+
+  // The voice guide routes over the VJTI ground-floor graph, so show that floor while it's open.
+  const openAssistant = () => {
+    if (assistantOpen) {
+      setAssistantOpen(false);
+      setNavRoute(null);
+      return;
+    }
+    if (activeBuildingCode !== "VJTI") switchBuilding("VJTI");
+    const groundFloor = mapFloors.find((floor) => floor.building_code === "VJTI" && floor.code === "G");
+    if (groundFloor) setActiveFloorId(groundFloor.id);
+    setSelectedPoi(null);
+    setAssistantOpen(true);
   };
 
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
@@ -208,14 +322,48 @@ export function AppShell() {
       setStoryError(getStoryErrorMessage(error));
       return;
     }
-    const [signedStory] = await signStories([{ ...data, author: "You", seen: false, verified: false } as StoryItem]);
-    setStories((current) => [signedStory ?? data as StoryItem, ...current]);
+    const { data: profile } = await supabase.from("profiles").select("full_name,username,role").eq("id", user.id).maybeSingle();
+    const author = profile?.full_name?.trim() || profile?.username?.trim() || "You";
+    const newStory = { ...data, author, seen: false, verified: profile?.role === "committee" || profile?.role === "admin" } as StoryItem;
+    const [signedStory] = await signStories([newStory]);
+    setStories((current) => [signedStory ?? newStory, ...current]);
     setComposerOpen(false);
     setStoryError("");
     setCaption("");
     URL.revokeObjectURL(storyDraft.url);
     setStoryDraft(null);
     setStoryIndex(0);
+  };
+
+  const deleteCurrentStory = async () => {
+    if (!currentStory || removingStory) return;
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user || user.id !== currentStory.author_id) {
+      setStoryError("You can only remove your own stories.");
+      return;
+    }
+    setStoryError("");
+    setRemovingStory(true);
+    const { data: deletedStory, error } = await supabase
+      .from("stories")
+      .delete()
+      .eq("id", currentStory.id)
+      .eq("author_id", user.id)
+      .select("id")
+      .maybeSingle();
+    if (error || !deletedStory) {
+      setStoryError(error ? getStoryErrorMessage(error) : "We couldn't remove this story. It may have expired or you may not have permission.");
+      setRemovingStory(false);
+      return;
+    }
+    if (currentStory.media_path) {
+      const { error: mediaError } = await supabase.storage.from("stories").remove([currentStory.media_path]);
+      if (mediaError && process.env.NODE_ENV === "development") console.warn("Story was removed, but its media cleanup failed:", mediaError.message);
+    }
+    setStories((current) => current.filter((story) => story.id !== currentStory.id));
+    setStoryIndex(null);
+    setStoryError("");
+    setRemovingStory(false);
   };
 
   const reportCurrentStory = async () => {
@@ -277,6 +425,10 @@ export function AppShell() {
     }, currentStory?.media_type === "video" ? 10000 : 5000);
   };
 
+  if (activeTab === "Network" || activeTab === "Calendar" || activeTab === "Profile") {
+    router.push(activeTab === "Network" ? "/network" : activeTab === "Calendar" ? "/calendar" : "/profile");
+    return null;
+  }
   if (activeTab !== "Home") {
     return <PlaceholderScreen activeTab={activeTab} onChange={setActiveTab} />;
   }
@@ -284,17 +436,17 @@ export function AppShell() {
   return (
     <main className="app-background home-shell relative min-h-screen text-[var(--color-ink)]">
       <div className="home-map-layer" aria-label="Campus map preview">
-        <CampusMapViewer floors={floors} pois={poiSeed} activeFloorId={activeFloorId} selectedPoiId={selectedPoi?.id ?? null} onSelectPoi={setSelectedPoi} onMapTap={() => setSelectedPoi(null)} onPanningChange={setIsPanning} categoryFilter={categoryFilter} query={query} />
+        <CampusMapViewer floors={mapFloors} pois={mapPois} activeFloorId={activeFloorId} selectedPoiId={selectedPoi?.id ?? null} focusPoiId={focusPoiId} onSelectPoi={(poi) => { setFocusPoiId(null); setSelectedPoi(poi); }} onMapTap={() => setSelectedPoi(null)} onPanningChange={setIsPanning} categoryFilter={categoryFilter} query={query} routeNodeIds={navRoute?.nodeIds} routeStep={navRoute?.step} />
       </div>
 
       <div className="home-top-overlay">
         <div className="home-top-inner flex flex-col gap-2">
           <header className="flex items-center justify-between gap-3 px-1">
             <div className="home-heading">
-              <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--color-accent)]">VJTI / CampusGlass</p>
+              <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--color-accent)]">VJTI / CampusConnect</p>
               <h1 className="text-lg font-bold tracking-[-0.02em]">Good morning, student.</h1>
             </div>
-            <GlassButton surface="glass" className="grid h-10 w-10 shrink-0 place-items-center" aria-label="Notifications">
+            <GlassButton surface="glass" className="grid h-10 w-10 shrink-0 place-items-center" aria-label="Notifications" onClick={() => router.push("/calendar?unread=1")}>
               <Bell className="h-5 w-5" />
             </GlassButton>
           </header>
@@ -313,7 +465,7 @@ export function AppShell() {
                   <button key={poi.id} className="search-result flex w-full items-center justify-between gap-2 rounded-2xl px-3 py-2 text-left text-sm hover:bg-white/8" onClick={() => handleSearchSelect(poi)}>
                     <div className="min-w-0">
                       <p className="truncate font-semibold">{poi.name}</p>
-                      <p className="text-[11px] text-[var(--color-muted)]">{poi.room_code} · {floors.find((floor) => floor.id === poi.floor_id)?.code}</p>
+                      <p className="text-[11px] text-[var(--color-muted)]">{poi.room_code} · {formatPoiLocation(poi)}</p>
                     </div>
                     <ChevronRight className="h-4 w-4 text-[var(--color-muted)]" />
                   </button>
@@ -331,8 +483,9 @@ export function AppShell() {
                 <span className="max-w-16 truncate text-[11px] font-medium text-[var(--color-ink)] opacity-75">Your story</span>
               </motion.button>
 
-              {activeStories.map((story, index) => {
+              {storyGroups.map((story) => {
                 const seen = story.seen ?? false;
+                const index = activeStories.findIndex((candidate) => candidate.author_id === story.author_id);
                 return (
                   <motion.button whileTap={{ scale: 0.94 }} key={story.id} className="flex min-w-[68px] flex-col items-center gap-1" aria-label={story.author} onClick={() => openStory(index)}>
                     <span className="story-ring relative grid h-16 w-16 place-items-center rounded-full p-[2px]" data-seen={seen}>
@@ -346,7 +499,7 @@ export function AppShell() {
             </section>
           </div>
 
-          <div className="category-filter-row flex gap-2 overflow-x-auto pb-1">
+          <div ref={filterRowRef} className="category-filter-row flex gap-2 overflow-x-auto pb-1">
             {filterOptions.map((option) => (
               <button key={option.value} type="button" className={`filter-chip ${categoryFilter === option.value ? "is-active" : ""}`} onClick={() => setCategoryFilter(option.value)}>
                 {option.label}
@@ -357,26 +510,37 @@ export function AppShell() {
       </div>
 
       <div className="map-tools">
+        <GlassBar className="building-pill">
+          {buildings.map((building) => (
+            <button key={building.code} type="button" data-active={building.code === activeBuildingCode} onClick={() => switchBuilding(building.code)}>
+              {building.code === "MECH" ? "Mech" : "VJTI"}
+            </button>
+          ))}
+        </GlassBar>
         <GlassBar className="floor-pill">
-          {floors.map((floor) => (
+          {activeBuildingFloors.map((floor) => (
             <button key={floor.id} type="button" data-active={floor.id === activeFloorId} onClick={() => setActiveFloorId(floor.id)}>
               {floor.code}
             </button>
           ))}
         </GlassBar>
-        <GlassButton surface="glass" className="directions-button" aria-label="Directions">
+        <GlassButton surface="glass" className="directions-button" aria-label="Voice directions" aria-pressed={assistantOpen} onClick={openAssistant}>
           <Navigation className="h-5 w-5 text-[var(--color-accent)]" />
         </GlassButton>
       </div>
 
       <AnimatePresence>
-        {selectedPoi && (
+        {assistantOpen && <VoiceAssistant key="voice-assistant" onRouteChange={handleRouteChange} onClose={() => setAssistantOpen(false)} />}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {selectedPoi && !assistantOpen && (
           <motion.div initial={{ y: 120, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 120, opacity: 0 }} transition={{ type: "spring", stiffness: 280, damping: 26 }} className="poi-sheet-container">
             <motion.div drag="y" dragConstraints={{ top: 0, bottom: 0 }} onDragEnd={(_, info) => { if (info.offset.y > 80) setSelectedPoi(null); }} className="poi-bottom-sheet surface-material p-4">
               <div className="mx-auto mb-3 h-1.5 w-12 rounded-full bg-[var(--color-separator)]" />
               <div className="flex items-start justify-between gap-4">
                 <div>
-                  <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--color-accent)]">{selectedPoi.floor_code} · {selectedPoi.category}</p>
+                  <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--color-accent)]">{formatPoiLocation(selectedPoi)} · {selectedPoi.category}</p>
                   <h2 className="mt-1 text-xl font-bold">{selectedPoi.name}</h2>
                 </div>
                 <span className="inline-flex items-center rounded-full bg-[var(--color-accent-soft)] px-2 py-1 text-[10px] font-semibold text-[var(--color-accent)]">
@@ -402,7 +566,7 @@ export function AppShell() {
         )}
       </AnimatePresence>
 
-      <BottomTabBar active={activeTab} onChange={setActiveTab} />
+      <BottomTabBar active={activeTab} onChange={(label) => label === "Chat" ? router.push("/chat") : setActiveTab(label)} />
 
       {typeof document !== "undefined" && createPortal(<AnimatePresence>
         {composerOpen && (
@@ -494,7 +658,10 @@ export function AppShell() {
 
               <div className="story-footer px-4 pb-6 pt-3">
                 <div className="mb-2 flex items-center justify-between">
-                  <button type="button" className="rounded-full bg-white/10 px-2 py-1 text-[11px] font-semibold" onClick={() => setReportOpen(true)}>Report</button>
+                  <div className="flex items-center gap-2">
+                    {currentUserId === currentStory.author_id && <button type="button" className="rounded-full bg-white/10 px-2 py-1 text-[11px] font-semibold disabled:opacity-60" disabled={removingStory} onClick={(event) => { event.stopPropagation(); void deleteCurrentStory(); }}><Trash2 className="mr-1 inline h-3 w-3" />{removingStory ? "Removing…" : "Remove"}</button>}
+                    <button type="button" className="rounded-full bg-white/10 px-2 py-1 text-[11px] font-semibold" onClick={() => setReportOpen(true)}>Report</button>
+                  </div>
                   <button type="button" className="grid h-8 w-8 place-items-center rounded-full bg-white/10" onClick={() => {}} aria-label="Pause story">
                     <Pause className="h-4 w-4" />
                   </button>
@@ -510,6 +677,7 @@ export function AppShell() {
 }
 
 function PlaceholderScreen({ activeTab, onChange }: { activeTab: string; onChange: (label: string) => void }) {
+  const router = useRouter();
   const icons = { Chat: MessageCircle, Network, Calendar: CalendarDays, Profile: UserRound };
   const Icon = icons[activeTab as keyof typeof icons] ?? Home;
   return (
@@ -520,16 +688,16 @@ function PlaceholderScreen({ activeTab, onChange }: { activeTab: string; onChang
             <Icon className="h-6 w-6" />
           </div>
           <div>
-            <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--color-accent)]">CampusGlass</p>
+            <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--color-accent)]">CampusConnect</p>
             <h1 className="text-2xl font-bold">{activeTab}</h1>
           </div>
         </header>
         <GlassCard className="mt-8 p-6">
           <h2 className="text-lg font-bold">{activeTab} is coming next</h2>
-          <p className="mt-2 text-sm leading-6 text-[var(--color-muted)]">This space is ready for the next phase of CampusGlass.</p>
+          <p className="mt-2 text-sm leading-6 text-[var(--color-muted)]">This space is ready for the next phase of CampusConnect.</p>
         </GlassCard>
       </div>
-      <BottomTabBar active={activeTab} onChange={onChange} />
+      <BottomTabBar active={activeTab} onChange={(label) => label === "Home" ? router.push("/") : onChange(label)} />
     </main>
   );
 }

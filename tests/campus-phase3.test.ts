@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { clamp, extractStoryMediaPath, getStoryErrorMessage, isStoryExpired, rankPoiSearch, screenToWorld, worldToScreen } from "@/lib/campus";
+import { clamp, extractStoryMediaPath, floorLookup, formatPoiLocation, getStoryErrorMessage, isStoryExpired, rankPoiSearch, screenToWorld, worldToScreen } from "@/lib/campus";
 
 describe("campus coordinate transforms", () => {
   it("keeps values in range when zooming at the viewport center", () => {
@@ -29,6 +29,16 @@ describe("poi search ranking", () => {
     const results = rankPoiSearch("g-201", pois);
     expect(results[0].poi.id).toBe("3");
     expect(results[0].score).toBeGreaterThan(0);
+  });
+
+  it("looks up floors within the selected building and formats cross-building locations", () => {
+    const floors = [
+      { id: "vjti-g", building_code: "VJTI", code: "G", name: "Ground", sort_order: 0, svg_path: "", width: 1, height: 1 },
+      { id: "mech-g", building_code: "MECH", code: "G", name: "Ground", sort_order: 0, svg_path: "", width: 1, height: 1 },
+    ];
+    expect(floorLookup(floors, "MECH", "G")?.id).toBe("mech-g");
+    expect(floorLookup(floors, "VJTI", "TPO")).toBeNull();
+    expect(formatPoiLocation({ building_name: "Mechanical building", floor_code: "TPO" })).toBe("Mechanical building, TPO");
   });
 });
 

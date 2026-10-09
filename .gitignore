@@ -43,3 +43,11 @@ next-env.d.ts
 map-source/**/*.png
 map-source/**/*.jpg
 map-source/**/*.jpeg
+map-source/**/*.webp
+map-source/**/debug.png
+map-source/**/crop-detection.png
+map-source/**/layout.json
+map-source/**/crop.json.suggested
+map-source/stitch-summary.json
+!map-source/**/stitched.png
+!map-source/**/labels.json

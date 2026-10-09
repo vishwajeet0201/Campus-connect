@@ -1,12 +1,16 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { MapPin, SearchX } from "lucide-react";
 import { clamp, screenToWorld } from "@/lib/campus";
+import { GroundFloorMap } from "./GroundFloorMap";
 
 export type MapFloor = {
   id: string;
+  building_id?: string;
+  building_code?: string;
+  building_name?: string;
   code: string;
   name: string;
   sort_order: number;
@@ -18,6 +22,9 @@ export type MapFloor = {
 export type MapPoi = {
   id: string;
   floor_id: string;
+  building_id?: string;
+  building_code?: string;
+  building_name?: string;
   category_id: string;
   name: string;
   description?: string | null;
@@ -55,8 +62,11 @@ export function CampusMapViewer({
   onSelectPoi,
   categoryFilter,
   query,
+  focusPoiId,
   onMapTap,
   onPanningChange,
+  routeNodeIds,
+  routeStep = 0,
 }: {
   floors: MapFloor[];
   pois: MapPoi[];
@@ -65,8 +75,11 @@ export function CampusMapViewer({
   onSelectPoi: (poi: MapPoi) => void;
   categoryFilter: string;
   query: string;
+  focusPoiId?: string | null;
   onMapTap?: () => void;
   onPanningChange?: (isPanning: boolean) => void;
+  routeNodeIds?: string[] | null;
+  routeStep?: number;
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const dragRef = useRef<{ pointerId: number; startX: number; startY: number; originX: number; originY: number } | null>(null);
@@ -75,6 +88,7 @@ export function CampusMapViewer({
   const [hoveredPoiId, setHoveredPoiId] = useState<string | null>(null);
 
   const activeFloor = floors.find((floor) => floor.id === activeFloorId) ?? floors[0];
+  const isVjtiGroundFloor = activeFloor?.building_code === "VJTI" && activeFloor.code === "G";
   const activePois = useMemo(() => {
     return pois.filter((poi) => poi.floor_id === activeFloorId && (categoryFilter === "all" || poi.category === categoryFilter || (categoryFilter === "toilets" && (poi.category === "toilet_men" || poi.category === "toilet_women"))));
   }, [pois, activeFloorId, categoryFilter]);
@@ -87,6 +101,7 @@ export function CampusMapViewer({
       return haystack.includes(term);
     });
   }, [activePois, query]);
+  const visiblePois = isVjtiGroundFloor ? [] : filteredPois;
 
   const handleZoom = (nextZoom: number, originX?: number, originY?: number) => {
     const clamped = clamp(nextZoom, 0.75, 2.8);
@@ -104,7 +119,7 @@ export function CampusMapViewer({
 
   const onPointerDown = (event: React.PointerEvent<HTMLDivElement>) => {
     const target = event.target as HTMLElement;
-    if (target.closest("button") || target.closest("svg")) {
+    if (target.closest("[role='button']")) {
       return;
     }
     onMapTap?.();
@@ -159,7 +174,7 @@ export function CampusMapViewer({
     setPan(nextPan);
   };
 
-  const focusPoi = (poi: MapPoi) => {
+  const focusPoi = useCallback((poi: MapPoi) => {
     if (!containerRef.current) return;
     const rect = containerRef.current.getBoundingClientRect();
     const world = { x: poi.x, y: poi.y };
@@ -168,14 +183,23 @@ export function CampusMapViewer({
     setPan({ x: targetX, y: targetY });
     setZoom(1.4);
     onSelectPoi(poi);
-  };
+  }, [onSelectPoi]);
+
+  useEffect(() => {
+    if (focusPoiId) {
+      const poi = pois.find((candidate) => candidate.id === focusPoiId);
+      if (poi) focusPoi(poi);
+    }
+  }, [focusPoi, focusPoiId, pois]);
 
   const touchStyle = useMemo(() => ({
-    transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
+    transform: isVjtiGroundFloor
+      ? `translate(calc(-50% + ${pan.x}px), ${pan.y}px) scale(${zoom})`
+      : `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`,
     transformOrigin: "center center",
     willChange: "transform",
     touchAction: "none",
-  }), [pan.x, pan.y, zoom]);
+  }), [isVjtiGroundFloor, pan.x, pan.y, zoom]);
 
   if (!activeFloor) {
     return <div className="campus-empty-state"><SearchX className="h-5 w-5" /> <span>No map floor available.</span></div>;
@@ -184,9 +208,13 @@ export function CampusMapViewer({
   return (
     <div className="campus-map-shell">
       <div ref={containerRef} className="campus-map-view" data-zoomed={zoom > 1.05} onPointerDown={onPointerDown} onPointerMove={onPointerMove} onPointerUp={onPointerUp} onPointerLeave={onPointerUp} onWheel={onWheel} role="application" aria-label="Campus map viewer">
-        <div className="campus-map-matrix" style={touchStyle}>
-          <img src={activeFloor.svg_path} alt={`${activeFloor.name} floor plan`} className="campus-map-image" />
-          {filteredPois.map((poi) => {
+        <div className={`campus-map-matrix${isVjtiGroundFloor ? " campus-map-matrix--stitched" : ""}`} style={touchStyle}>
+          {isVjtiGroundFloor ? (
+            <GroundFloorMap routeNodeIds={routeNodeIds} routeStep={routeStep} />
+          ) : (
+            <img src={activeFloor.svg_path} alt={`${activeFloor.building_name ?? activeFloor.building_code ?? "Campus"} ${activeFloor.name} floor plan`} className="campus-map-image" loading="lazy" />
+          )}
+          {visiblePois.map((poi) => {
             const style = CATEGORY_STYLES[poi.category ?? "other"] ?? CATEGORY_STYLES.other;
             const isSelected = selectedPoiId === poi.id;
             const isHovered = hoveredPoiId === poi.id;

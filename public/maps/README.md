@@ -1,12 +1,14 @@
-# Campus map placeholder conventions
+# Campus map asset conventions
 
-These placeholder SVG files are intentionally simple floor-plan stand-ins. Replace each file with a real campus drawing while keeping the same conventions so the map viewer and POI markers can continue to work.
+The map viewer supports SVG floor plans for the upper floors and a six-tile horizontal image map for the VJTI main-building ground floor.
 
 ## File layout
 
-- `floor-G.svg`
+- `vjti-ground-floor-1.jpg` through `vjti-ground-floor-6.jpg`
 - `floor-1.svg`
 - `floor-2.svg`
+
+The VJTI ground-floor images are cleaned of phone chrome and rendered in numeric order from left to right on a `6072 × 1510` canvas. Keep each tile at `1012 × 1510` so the seams remain stable. Runtime POI markers are intentionally not shown on this floor.
 
 Each SVG should use a consistent viewBox such as `0 0 1600 1000` and define a few layer groups for rooms, corridors, walls, and labels.
 
