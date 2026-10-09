@@ -17,8 +17,8 @@ const IMAGES: Record<string, FloorImage> = {
   "VJTI:2": { src: "/maps/stitched/vjti-2.png", width: 1697, height: 1509 },
   "VJTI:3": { src: "/maps/stitched/vjti-3.png", width: 951, height: 455 },
   "MECH:G": { src: "/maps/stitched/mech-G.png", width: 2697, height: 1680 },
-  "MECH:1": { src: "/maps/stitched/mech-1.png", width: 1060, height: 1030, partial: "The east wing (DL 201, DL 202 and the faculty cabins) isn't shown yet: the screenshots of this floor don't overlap, so its position can't be verified." },
-  "MECH:2": { src: "/maps/stitched/mech-2.png", width: 2286, height: 994 },
+  "MECH:1": { src: "/maps/stitched/mech-1.png", width: 2366, height: 1031 },
+  "MECH:2": { src: "/maps/stitched/mech-2.png", width: 2287, height: 994 },
   "MECH:3": { src: "/maps/stitched/mech-3.png", width: 832, height: 254 },
   "MECH:TPO": { src: "/maps/stitched/mech-TPO.png", width: 942, height: 604 },
 };

@@ -2,8 +2,8 @@
   "source": "/home/user/Campus-connect/map-source/mech-floor-1",
   "image": "mech-1.png",
   "size": [
-    1060,
-    1030
+    2366,
+    1031
   ],
   "tiles": [
     {
@@ -14,11 +14,67 @@
       "valid_px": 1795565,
       "mismatch_fraction": 0.0,
       "edge_coverage": 1.0
+    },
+    {
+      "file": "Screenshot_20261007_131141.jpg",
+      "scale": 1.00141,
+      "x": 1506.62,
+      "y": -651.23,
+      "valid_px": 1787241,
+      "mismatch_fraction": 0.0005214741604517802,
+      "edge_coverage": 0.9780773926429216
+    },
+    {
+      "file": "Screenshot_20261009_213824.jpg",
+      "scale": 1.12676,
+      "x": 782.11,
+      "y": -856.3,
+      "valid_px": 2266452,
+      "mismatch_fraction": 0.00190959261435936,
+      "edge_coverage": 0.9688029465930018
     }
   ],
-  "seams": [],
-  "uncovered_fraction": 0.0453,
-  "excluded_tiles": {
-    "Screenshot_20261007_131141.jpg": "Does not overlap Screenshot_20261007_131128.jpg. Its left edge shows an unlabelled room, but the room cut off at the right of the first screenshot carries a centred 'Computational Fluid Dynamics (CFD)' label that would have to reach into that strip, so unseen floor lies between the two. Add a screenshot panned between them to place this east wing."
+  "seams": [
+    {
+      "from": "Screenshot_20261007_131128.jpg",
+      "to": "Screenshot_20261009_213824.jpg",
+      "status": "proven",
+      "scale": 1.1267605633802817,
+      "dx": 792.112676056338,
+      "dy": -269.29577464788736,
+      "stats": {
+        "overlap_px": 288279,
+        "mismatch_fraction": 0.0019945955133741965,
+        "mean_abs_diff": 1.1433194925749015,
+        "edges_a": 6247,
+        "edges_b": 5748,
+        "matched_edges": 6118,
+        "edge_agreement": 0.9881566731780848
+      },
+      "sift_inliers": 23,
+      "verified_in": "the zoomed-out tile's frame"
+    },
+    {
+      "from": "Screenshot_20261009_213824.jpg",
+      "to": "Screenshot_20261007_131141.jpg",
+      "status": "proven",
+      "scale": 0.88875,
+      "dx": 643,
+      "dy": 182,
+      "stats": {
+        "overlap_px": 575565,
+        "mismatch_fraction": 0.0008374379957085647,
+        "mean_abs_diff": 0.7637556140488042,
+        "edges_a": 7842,
+        "edges_b": 8127,
+        "matched_edges": 7833,
+        "edge_agreement": 0.9852446360290611
+      },
+      "sift_inliers": 53
+    }
+  ],
+  "uncovered_fraction": 0.0101,
+  "resampled_tiles": {
+    "Screenshot_20261009_213824.jpg": "received at 923x2000, resampled to 1080x2340"
   }
 }
