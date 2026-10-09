@@ -18,12 +18,23 @@ the floor-title pill and its shadow. The two floating buttons are masked too, bu
 their soft drop shadow is *divided back out* using the measured transmission map
 `fab-shadow.png`, so map content under the shadow is recovered instead of lost.
 
-Each consecutive pair is registered by an exhaustive search over every
+Each tile is registered to its predecessor by an exhaustive search over every
 translation, then a zoom sweep (screenshots are sometimes pinch-zoomed; e.g.
-`mech-floor-2` tile 2 is at 1.34x). A seam is **proven** only when, over the
-whole overlap, ≥90% of edges coincide and <3% of pixels differ (the residue is
-anti-aliasing of 1px outlines at sub-pixel offsets). Anything weaker stops the
-run. Each tile is then compared against the final composite.
+`mech-floor-2` tile 2 is at 0.745x). A tile that doesn't overlap its
+predecessor (a later screenshot that bridges two earlier ones) is registered to
+whichever placed tile it does overlap. A zoomed-out tile is verified in its own,
+coarser frame, so sharp outlines are never judged against upsampled blur. A seam
+is **proven** only when, over the whole overlap, ≥90% of edges coincide and <3%
+of pixels differ (the residue is anti-aliasing of 1px outlines at sub-pixel
+offsets); if a clearly different offset fits about as well, the seam is
+ambiguous. Anything weaker or ambiguous stops the run. Each tile is then
+compared against the final composite.
+
+Screenshots that arrive downscaled (e.g. 923x2000 after a chat upload) are
+resampled to the phone's 1080x2340 and only fill what no full-resolution tile
+shows; the report lists them under `resampled_tiles`. The image is cropped to
+the drawn content (specks under 25px of compression noise don't count) plus a
+24px margin.
 
 Seams that pixels cannot prove go in the floor's `stitch.json`:
 
@@ -35,13 +46,13 @@ Pixels no screenshot shows are left transparent, never guessed.
 
 | Floor | Tiles | Seams | Notes |
 | --- | --- | --- | --- |
-| VJTI G | 6 | 4 proven, 1 constrained | Tile 6 shows only the uniform Hostels / Football Ground bands: its vertical offset is proven, its horizontal offset is the smallest one the labels allow (see `stitch.json`). The east edge of those two blocks is in no screenshot. |
+| VJTI G | 8 | 6 proven, 1 constrained | Tile 6 shows only the uniform Hostels / Football Ground bands: its vertical offset is proven, its horizontal offset is estimated from where the two labels sit on their blocks, 837 ± 30px (see `stitch.json`). The last two screenshots (resampled, zoomed out 2.009x) add the blocks' east ends, the Cricket Ground and Gate 5. |
 | VJTI 1 | 4 | 3 proven | tile 4 is zoomed 1.00375x |
 | VJTI 2 | 2 | 1 proven | |
 | VJTI 3 | 1 | — | |
 | Mech G | 3 | 2 proven | |
-| Mech 1 | 2 | **partial** | The two screenshots don't overlap; the east wing (DL 201/202, faculty cabins) needs one more screenshot between them. |
-| Mech 2 | 3 | 2 proven | zoom changes of 0.745x and 1.43x |
+| Mech 1 | 3 | 2 proven | The third screenshot (resampled, zoomed out 1.127x) bridges the first two. |
+| Mech 2 | 3 | 2 proven | zoom changes of 0.745x and 1.432x |
 | Mech 3, TPO | 1 each | — | |
 
 ## 2. Vector plan and navigation (`vectorize.py`, `build_floor.py`)
