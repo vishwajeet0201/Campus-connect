@@ -63,6 +63,12 @@ def walk_masks(cls: np.ndarray, room_id: np.ndarray, stairs: list[dict]):
         indoor &= ~cv2.dilate(block.astype(np.uint8), np.ones((3, 3), np.uint8)).astype(bool)
     outdoor = (cls == C["white"]) | (cls == C["gate"])
     free = indoor | outdoor
+    # Where two walkable colours meet (a path's end on open ground) the
+    # anti-aliased seam is a column of mixed pixels; walk across it. Walls are
+    # dark ink and stay blocking.
+    seam = cv2.morphologyEx(free.astype(np.uint8), cv2.MORPH_CLOSE, np.ones((5, 5), np.uint8)).astype(bool) & (cls == MIXED) & (room_id == 0)
+    outdoor |= seam & cv2.dilate(outdoor.astype(np.uint8), np.ones((5, 5), np.uint8)).astype(bool)
+    free |= seam
     free_c = cv2.erode(free.astype(np.uint8), disk(CLEARANCE)).astype(bool)
     los = cv2.erode(free.astype(np.uint8), disk(CLEARANCE - 3)).astype(bool)
     return indoor, outdoor, free_c, los
@@ -408,16 +414,17 @@ def main() -> int:
         # from the nearer edge of the map.
         bx, by, bw, bh = box
         inside = np.zeros_like(free_c)
+        c = CLEARANCE  # stand clear of the marker, as of any edge
         if bw >= bh:
             inward = "bottom" if by < H - (by + bh) else "top"
             mid = (bx + bw / 2, by + bh if inward == "bottom" else by)
-            inside[by + bh:] = inward == "bottom"
-            inside[:by] = inward == "top"
+            inside[by + bh + c:] = inward == "bottom"
+            inside[:max(0, by - c)] = inward == "top"
         else:
             inward = "right" if bx < W - (bx + bw) else "left"
             mid = (bx + bw if inward == "right" else bx, by + bh / 2)
-            inside[:, bx + bw:] = inward == "right"
-            inside[:, :bx] = inward == "left"
+            inside[:, bx + bw + c:] = inward == "right"
+            inside[:, :max(0, bx - c)] = inward == "left"
         q = snap(free_c & inside, *mid, 80)
         if q is None:
             raise SystemExit(f"gate {g['id']} has no walkable ground on its {inward} side")

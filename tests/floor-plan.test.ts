@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { VJTI_GROUND, imageFor } from "@/lib/maps";
-import { destinations, planRoute } from "@/lib/maps/routing";
+import { destinations, distanceToRoom, planRoute } from "@/lib/maps/routing";
 import type { PlanPlace, PlanRoom, Point } from "@/lib/maps/types";
 
 const plan = VJTI_GROUND;
@@ -97,6 +97,14 @@ describe("VJTI ground floor plan data", () => {
     expect(plan.gates.find((g) => g.id === "gate-5")!.label.rotate).toBe(90);
   });
 
+  it("gives a stepped building an entrance on every long face", () => {
+    const hostels = plan.rooms.find((r) => r.id === "vjti-hostels")!;
+    const bottoms = (hostels.inferredEntrances ?? []).filter((e) => e.side === "bottom");
+    // One onto the path below the west block, one below the taller east block.
+    expect(bottoms.some((e) => e.x < 4570 && e.y > 800), JSON.stringify(bottoms)).toBe(true);
+    expect(bottoms.some((e) => e.x > 4600 && e.y < 700), JSON.stringify(bottoms)).toBe(true);
+  });
+
   it("draws fields and gardens as their real outlines", () => {
     for (const place of areas) {
       expect(place.rings?.[0]?.length, place.id).toBeGreaterThanOrEqual(4);
@@ -109,6 +117,8 @@ describe("VJTI ground floor plan data", () => {
       return sum + x * y2 - x2 * y;
     }, 0)) / 2;
     expect(area / (cricket.bbox![2] * cricket.bbox![3])).toBeLessThan(0.95);
+    // A straight slanted side, not a traced staircase of anti-aliased pixels.
+    expect(ring.length).toBeLessThanOrEqual(15);
   });
 
   it("matches the size of the stitched image it was drawn from", () => {
@@ -148,7 +158,8 @@ describe("routes on the VJTI ground floor", () => {
       expect(route, `${from} -> ${to}`).not.toBeNull();
       const kinds = route.nodes.map((n) => plan.nav.nodes[n][2]);
       const inside = (k: string) => k === "room" || k === "place";
-      const entered = new Set(route.nodes.filter((_, i) => inside(kinds[i])).map((n) => plan.nav.nodes[n][3]));
+      // The start and end features count as entered: a walk to a door-less one ends on its outline.
+      const entered = new Set([from, to, ...route.nodes.filter((_, i) => inside(kinds[i])).map((n) => plan.nav.nodes[n][3])]);
       for (let i = 0; i < route.points.length - 1; i += 1) {
         // Hops between a room's (or field's) centre and its doorway are inside it by design.
         if (inside(kinds[i]) || inside(kinds[i + 1])) continue;
@@ -172,6 +183,39 @@ describe("routes on the VJTI ground floor", () => {
     }
   });
 
+  it("describes every part of the walk in some step", () => {
+    const fromFields = areas.flatMap((a) => places.filter((p) => p.id !== a.id).slice(0, 25).map((p) => [a.id, p.id] as [string, string]));
+    for (const [from, to] of [...journeys, ...fromFields]) {
+      const route = planRoute(plan, byId(from), byId(to))!;
+      for (let i = 0; i < route.points.length - 1; i += 1) {
+        expect(route.steps.some((st) => st.start <= i && st.end >= i + 1), `${from} -> ${to}: segment ${i} is in no step`).toBe(true);
+      }
+    }
+  });
+
+  it("starts and ends a walk to a door-less feature at the entrance it uses", () => {
+    const hostels = plan.rooms.find((r) => r.id === "vjti-hostels")!;
+    const route = planRoute(plan, byId("gate-5"), byId("vjti-hostels"))!;
+    const end = route.points.at(-1)!;
+    expect(hostels.inferredEntrances!.some((e) => Math.hypot(e.x - end.x, e.y - end.y) < 2), JSON.stringify(end)).toBe(true);
+    expect(route.steps.at(-1)!.text).toMatch(/side of VJTI Hostels/);
+    const back = planRoute(plan, byId("football-ground"), byId("main-gate"))!;
+    expect(back.steps[0].text).toMatch(/^Start at the \w+ side of Football Ground\./);
+  });
+
+  it("routes from one washroom to its namesake rather than to itself", () => {
+    const route = planRoute(plan, byId("boys-washroom"), byId("boys-washroom-east"))!;
+    expect(route.points.length).toBeGreaterThan(1);
+    expect(route.steps.at(-1)!.text).not.toMatch(/already at/);
+  });
+
+  it("takes the road between the hostels and the Cricket Ground to Gate 5", () => {
+    for (const from of ["main-gate", "mechanical-gate"]) {
+      const route = planRoute(plan, byId(from), byId("gate-5"))!;
+      expect(route.points.some((p) => p.x > 5000 && p.y > 680 && p.y < 765), `${from}: ${JSON.stringify(route.points)}`).toBe(true);
+    }
+  });
+
   it("never steps on a staircase", () => {
     for (const [from, to] of journeys.slice(0, 120)) {
       const route = planRoute(plan, byId(from), byId(to))!;
@@ -192,6 +236,22 @@ describe("routes on the VJTI ground floor", () => {
       }
       expect(route.steps.at(-1)!.text).toMatch(/You have arrived|You are already/);
     }
+  });
+});
+
+describe("distance to a room", () => {
+  // A stepped block: wide and low on the left, tall on the right.
+  const stepped: PlanRoom = {
+    id: "stepped", fid: 0, bbox: [0, 0, 200, 100],
+    shape: { type: "poly", points: [[0, 50], [100, 50], [100, 0], [200, 0], [200, 100], [0, 100]] },
+  } as PlanRoom;
+
+  it("is zero inside and measured to the outline, not the box, in a notch", () => {
+    expect(distanceToRoom(stepped, { x: 150, y: 50 })).toBe(0);
+    expect(distanceToRoom(stepped, { x: 50, y: 70 })).toBe(0);
+    // In the empty notch above the low block: 30px from its roof, though inside the box.
+    expect(distanceToRoom(stepped, { x: 50, y: 20 })).toBeCloseTo(30);
+    expect(distanceToRoom(stepped, { x: 260, y: 50 })).toBeCloseTo(60);
   });
 });
 

@@ -46,17 +46,18 @@ ground floor as a vector plan with search, room details and walking directions.
 * VJTI ground floor: no screenshot shows the west end of the VJTI Hostels /
   Football Ground blocks together with anything further east, so everything
   east of x≈3616 (the blocks' east ends, the Cricket Ground, Gate 5) is placed
-  from where the blocks' labels sit: ±30px horizontally (under 1% of the
-  floor's width). The two zoomed-out east screenshots add up to ±0.23% zoom
-  uncertainty (±5px at Gate 5). One zoomed-out screenshot showing the hostel
-  block's west end and its "VJTI Hostels" label together would make that seam
-  proven.
+  from where the Football Ground's label sits on its block: ±10px
+  horizontally. The two zoomed-out east screenshots add ±0.12% zoom
+  uncertainty (about ±2.5px at Gate 5). One zoomed-out screenshot showing the
+  blocks' west ends and their labels together would make that seam proven.
 * VJTI ground floor: the south edge of the Textile Garden is in no screenshot;
   it's drawn to the last visible pixel and faded.
 * Some floors run on past their screenshots: the Mech ground floor's east end
   (open area, DL 001), the Mech 1st floor's west end (Staff Room) and two
   room corners under the floating buttons on VJTI 1st floor. Areas no
   screenshot shows are hatched, so a room cut off there reads as unseen.
+* Parts shown only by the two downscaled uploads (Mech 1's middle, the VJTI
+  ground floor east of the football ground) are softer than the rest.
 * Rooms with no drawn door (building blocks, the stage, fields) get inferred
   entrances on every side facing walkable space; the sheet says so.
 * The source map has no scale, so routes give no distances or times. Walkable
