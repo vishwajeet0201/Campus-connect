@@ -45,9 +45,10 @@ function roomPath(room: PlanRoom) {
 /** Fade an edge no screenshot shows, so the block reads as continuing. */
 function UnseenEdges({ id, box, sides }: { id: string; box: [number, number, number, number]; sides: Side[] }) {
   const [x, y, w, h] = box;
-  const depth = Math.min(160, Math.max(w, h) * 0.15);
   return <>{sides.map((side) => {
     const horizontal = side === "left" || side === "right";
+    // Never deeper than half the block across that side, so a shallow block keeps most of its fill.
+    const depth = Math.min(160, Math.max(w, h) * 0.15, (horizontal ? w : h) * 0.5);
     const gid = `unseen-${id}-${side}`;
     const rect = side === "right" ? { x: x + w - depth, y, width: depth, height: h }
       : side === "left" ? { x, y, width: depth, height: h }
@@ -66,10 +67,12 @@ function UnseenEdges({ id, box, sides }: { id: string; box: [number, number, num
   })}</>;
 }
 
-function Label({ x, y, size, lines, color = PLAN_COLORS.ink, weight = 400, rotate }: { x: number; y: number; size: number; lines: string[]; color?: string; weight?: number; rotate?: number }) {
+function Label({ x, y, size, lines, color = PLAN_COLORS.ink, weight = 400, rotate, halo }: { x: number; y: number; size: number; lines: string[]; color?: string; weight?: number; rotate?: number; halo?: string }) {
   const lead = size * 1.22;
   const top = y - ((lines.length - 1) * lead) / 2;
-  return <text className="plan-label" x={x} y={top} fontSize={size} fill={color} fontWeight={weight} textAnchor="middle" dominantBaseline="central" transform={rotate ? `rotate(${rotate} ${x} ${y})` : undefined}>
+  // A halo keeps light text readable where it runs past its block (e.g. a notched garden).
+  const haloProps = halo ? { stroke: halo, strokeWidth: size * 0.28, strokeLinejoin: "round" as const, paintOrder: "stroke" } : {};
+  return <text className="plan-label" x={x} y={top} fontSize={size} fill={color} fontWeight={weight} textAnchor="middle" dominantBaseline="central" transform={rotate ? `rotate(${rotate} ${x} ${y})` : undefined} {...haloProps}>
     {lines.map((line, i) => <tspan key={i} x={x} y={top + i * lead}>{line.endsWith(" ♥") ? <>{line.slice(0, -2)} <tspan fill="#e0245e">♥</tspan></> : line}</tspan>)}
   </text>;
 }
@@ -152,7 +155,7 @@ export const FloorPlanLayer = memo(function FloorPlanLayer({
         const selected = selectedId === place.id;
         const size = place.bbox ? fitLabel(place.label.lines, place.label.size, { w: place.bbox[2], h: place.bbox[3] }, scale) : placeSize(place.label.size);
         const shown = size ?? (selected ? Math.max(place.label.size, MIN_LABEL_PX / scale) : null);
-        return shown ? <Label key={place.id} x={place.label.x} y={place.label.y} size={shown} lines={place.label.lines} color={place.area === "garden" ? "#ffffff" : PLAN_COLORS.ink} weight={selected ? 700 : 400} /> : null;
+        return shown ? <Label key={place.id} x={place.label.x} y={place.label.y} size={shown} lines={place.label.lines} color={place.area === "garden" ? "#ffffff" : PLAN_COLORS.ink} halo={place.area === "garden" ? PLAN_COLORS.garden : undefined} weight={selected ? 700 : 400} /> : null;
       })}
     </g>
     {/* Open places are tappable by their label. */}
