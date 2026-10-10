@@ -35,12 +35,12 @@
     },
     {
       "file": "Screenshot_20261007_131014.jpg",
-      "scale": 1.00375,
-      "x": 1638.0,
-      "y": -276.0,
-      "valid_px": 1796382,
-      "mismatch_fraction": 0.0017084339522440105,
-      "edge_coverage": 0.9951398656040006
+      "scale": 1.00363,
+      "x": 1638.17,
+      "y": -275.75,
+      "valid_px": 1796448,
+      "mismatch_fraction": 0.0009535483353818201,
+      "edge_coverage": 0.9942910925614479
     }
   ],
   "seams": [
@@ -82,17 +82,23 @@
       "from": "Screenshot_20261007_131000.jpg",
       "to": "Screenshot_20261007_131014.jpg",
       "status": "proven",
-      "scale": 1.00375,
-      "dx": 216,
-      "dy": 76,
+      "scale": 1.0036338317614548,
+      "dx": 216.1743898848692,
+      "dy": 76.25494052797133,
       "stats": {
-        "overlap_px": 1340119,
-        "mismatch_fraction": 0.0021766723701402636,
-        "mean_abs_diff": 1.2938074902303451,
-        "edges_a": 55089,
-        "edges_b": 59136,
-        "matched_edges": 55012,
-        "edge_agreement": 0.9966612574987771
+        "overlap_px": 1342591,
+        "mismatch_fraction": 0.0012691877124157691,
+        "mean_abs_diff": 1.0967591768453684,
+        "edges_a": 55111,
+        "edges_b": 60033,
+        "matched_edges": 55101,
+        "edge_agreement": 0.9968231485552779
+      },
+      "zoom_fit": {
+        "method": "Gauss-Newton fit of zoom + shift over the overlap's pixels",
+        "swept_scale": 1.00375,
+        "cells": 273,
+        "scale_sd": 1.1e-05
       }
     }
   ],

@@ -2,7 +2,7 @@
   "source": "/home/user/Campus-connect/map-source/mech-floor-2",
   "image": "mech-2.png",
   "size": [
-    2287,
+    2289,
     994
   ],
   "tiles": [
@@ -12,26 +12,26 @@
       "x": -26.0,
       "y": -676.0,
       "valid_px": 1795565,
-      "mismatch_fraction": 0.00021553104454586716,
+      "mismatch_fraction": 7.295753704265788e-05,
       "edge_coverage": 1.0
     },
     {
       "file": "Screenshot_20261007_131159.jpg",
-      "scale": 0.74525,
-      "x": 850.0,
-      "y": -268.0,
-      "valid_px": 989061,
-      "mismatch_fraction": 0.00042464519377470144,
+      "scale": 0.74643,
+      "x": 849.68,
+      "y": -269.75,
+      "valid_px": 991210,
+      "mismatch_fraction": 3.531037822459418e-05,
       "edge_coverage": 1.0
     },
     {
       "file": "Screenshot_20261007_131203.jpg",
-      "scale": 1.06731,
-      "x": 1328.16,
-      "y": -709.87,
-      "valid_px": 2033090,
-      "mismatch_fraction": 0.0008735471622013782,
-      "edge_coverage": 0.9999578503688092
+      "scale": 1.06869,
+      "x": 1328.96,
+      "y": -711.66,
+      "valid_px": 2038116,
+      "mismatch_fraction": 0.00023992746242117722,
+      "edge_coverage": 1.0
     }
   ],
   "seams": [
@@ -39,17 +39,23 @@
       "from": "Screenshot_20261007_131153.jpg",
       "to": "Screenshot_20261007_131159.jpg",
       "status": "proven",
-      "scale": 0.74525,
-      "dx": 876,
-      "dy": 408,
+      "scale": 0.7464305429033492,
+      "dx": 875.6769124479433,
+      "dy": 406.2544044535997,
       "stats": {
-        "overlap_px": 190711,
-        "mismatch_fraction": 0.003203800514915238,
-        "mean_abs_diff": 0.9301875612838274,
-        "edges_a": 4435,
-        "edges_b": 4856,
-        "matched_edges": 4435,
+        "overlap_px": 192339,
+        "mismatch_fraction": 0.0015233519982946777,
+        "mean_abs_diff": 0.7597523123235538,
+        "edges_a": 4452,
+        "edges_b": 4942,
+        "matched_edges": 4452,
         "edge_agreement": 1.0
+      },
+      "zoom_fit": {
+        "method": "Gauss-Newton fit of zoom + shift over the overlap's pixels",
+        "swept_scale": 0.746,
+        "cells": 35,
+        "scale_sd": 0.000173
       },
       "sift_inliers": 37
     },
@@ -57,17 +63,23 @@
       "from": "Screenshot_20261007_131159.jpg",
       "to": "Screenshot_20261007_131203.jpg",
       "status": "proven",
-      "scale": 1.4321518080916575,
-      "dx": 641.6040100250626,
-      "dy": -592.9108485499463,
+      "scale": 1.431733355819793,
+      "dx": 642.106024036523,
+      "dy": -592.0411061145518,
       "stats": {
-        "overlap_px": 299115,
-        "mismatch_fraction": 0.0025374855824682814,
-        "mean_abs_diff": 0.43095130635374357,
+        "overlap_px": 297949,
+        "mismatch_fraction": 0.0008491386109703338,
+        "mean_abs_diff": 0.3686839022785779,
         "edges_a": 3156,
-        "edges_b": 3502,
+        "edges_b": 3333,
         "matched_edges": 3155,
-        "edge_agreement": 0.9566539579732134
+        "edge_agreement": 0.9927669420391031
+      },
+      "zoom_fit": {
+        "method": "Gauss-Newton fit of zoom + shift over the overlap's pixels",
+        "swept_scale": 0.698,
+        "cells": 60,
+        "scale_sd": 0.000122
       },
       "sift_inliers": 14,
       "verified_in": "the zoomed-out tile's frame"

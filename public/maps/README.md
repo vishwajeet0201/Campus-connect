@@ -10,5 +10,5 @@
 
 The VJTI ground floor is drawn as an interactive vector plan from
 `lib/maps/data/vjti-G.json`, whose coordinates are pixels of
-`stitched/vjti-G.png` (6225 × 1835). Keep them in step: regenerate both with
+`stitched/vjti-G.png` (6226 × 1835). Keep them in step: regenerate both with
 `npm run maps:stitch` and `npm run maps:build`.

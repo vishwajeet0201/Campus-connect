@@ -2,7 +2,7 @@
   "source": "/home/user/Campus-connect/map-source/vjti-ground-floor",
   "image": "vjti-G.png",
   "size": [
-    6225,
+    6226,
     1835
   ],
   "tiles": [
@@ -62,20 +62,20 @@
     },
     {
       "file": "Screenshot_20261009_213957.jpg",
-      "scale": 2.00904,
-      "x": 3469.28,
-      "y": -1424.08,
-      "valid_px": 7221789,
-      "mismatch_fraction": 0.0010425394594054188,
-      "edge_coverage": 0.8483320729350474
+      "scale": 2.00903,
+      "x": 3469.82,
+      "y": -1424.98,
+      "valid_px": 7222084,
+      "mismatch_fraction": 0.0009353255930005799,
+      "edge_coverage": 0.8174364802337852
     },
     {
       "file": "Screenshot_20261009_214000.jpg",
-      "scale": 2.00904,
-      "x": 4588.32,
-      "y": -1542.61,
-      "valid_px": 7219838,
-      "mismatch_fraction": 3.739696098444314e-06,
+      "scale": 2.00903,
+      "x": 4588.85,
+      "y": -1543.51,
+      "valid_px": 7219966,
+      "mismatch_fraction": 4.293649028264122e-06,
       "edge_coverage": 1.0
     }
   ],
@@ -173,17 +173,23 @@
       "from": "6.jpg",
       "to": "Screenshot_20261009_213957.jpg",
       "status": "proven",
-      "scale": 2.0090406830738323,
-      "dx": 62.2802611752888,
-      "dy": -1129.0808638874937,
+      "scale": 2.009030115277417,
+      "dx": 62.81718445090539,
+      "dy": -1129.9795537957568,
       "stats": {
-        "overlap_px": 401178,
-        "mismatch_fraction": 0.001984156658640304,
-        "mean_abs_diff": 0.8223083020504613,
-        "edges_a": 3611,
-        "edges_b": 4452,
-        "matched_edges": 3611,
-        "edge_agreement": 0.9474038864123465
+        "overlap_px": 400290,
+        "mismatch_fraction": 0.003085263184191461,
+        "mean_abs_diff": 0.8694746308926029,
+        "edges_a": 3607,
+        "edges_b": 3969,
+        "matched_edges": 3605,
+        "edge_agreement": 0.9406756290307104
+      },
+      "zoom_fit": {
+        "method": "Gauss-Newton fit of zoom + shift over the overlap's pixels",
+        "swept_scale": 0.498,
+        "cells": 72,
+        "scale_sd": 0.000282
       },
       "sift_inliers": 23,
       "verified_in": "the zoomed-out tile's frame"

@@ -20,7 +20,7 @@ their soft drop shadow is *divided back out* using the measured transmission map
 
 Each tile is registered to its predecessor by an exhaustive search over every
 translation, then a zoom sweep (screenshots are sometimes pinch-zoomed; e.g.
-`mech-floor-2` tile 2 is at 0.745x). A tile that doesn't overlap its predecessor
+`mech-floor-2` tile 2 is at 0.746x). A tile that doesn't overlap its predecessor
 (a later screenshot that bridges two earlier ones) is registered to whichever
 placed tile it does overlap. A zoomed-out tile is verified in its own, coarser
 frame, so sharp outlines are never judged against upsampled blur. A zoom found
@@ -54,12 +54,12 @@ Pixels no screenshot shows are left transparent, never guessed.
 | Floor | Tiles | Seams | Notes |
 | --- | --- | --- | --- |
 | VJTI G | 8 | 6 proven, 1 constrained | Tile 6 shows only the uniform Hostels / Football Ground bands: its vertical offset is proven, its horizontal offset is estimated from where the two labels sit on their blocks, 837 ± 30px (see `stitch.json`). The last two screenshots (resampled, zoomed out 2.009x) add the blocks' east ends, the Cricket Ground and Gate 5. |
-| VJTI 1 | 4 | 3 proven | tile 4 is zoomed 1.00375x |
+| VJTI 1 | 4 | 3 proven | tile 4 is zoomed 1.0036x |
 | VJTI 2 | 2 | 1 proven | |
 | VJTI 3 | 1 | — | |
 | Mech G | 3 | 2 proven | |
-| Mech 1 | 3 | 2 proven | The third screenshot (resampled, zoomed out 1.127x) bridges the first two. |
-| Mech 2 | 3 | 2 proven | zoom changes of 0.745x and 1.432x |
+| Mech 1 | 3 | 2 proven | The third screenshot (resampled, zoomed out 1.125x) bridges the first two, which then line up at the same zoom. |
+| Mech 2 | 3 | 2 proven | zoom changes of 0.746x and 1.432x |
 | Mech 3, TPO | 1 each | — | |
 
 ## 2. Vector plan and navigation (`vectorize.py`, `build_floor.py`)
