@@ -57,9 +57,10 @@ export function MapViewport({
   const animation = useRef<number | null>(null);
   const frame = useRef<number | null>(null);
   const [ready, setReady] = useState(false);
-  useEffect(() => {
-    insetsRef.current = insets;
-  }, [insets]);
+  const laidOut = useRef(false);
+  // What the camera was last asked to frame (the floor, a feature, a route),
+  // as a function of the insets, until the user pans or zooms themselves.
+  const framing = useRef<(() => Camera) | null>(null);
 
   const limits = useCallback(() => {
     const { w, h } = size.current;
@@ -143,6 +144,7 @@ export function MapViewport({
   }, []);
 
   const zoomAround = useCallback((sx: number, sy: number, factor: number, animate = false) => {
+    framing.current = null;
     const { w, h } = size.current;
     const c = cam.current;
     const mx = c.cx + (sx - w / 2) / c.k;
@@ -156,14 +158,15 @@ export function MapViewport({
 
   useImperativeHandle(controllerRef, () => ({
     fit: (box, animate = true) => {
-      const target = cameraFor(box ?? { x: 0, y: 0, w: width, h: height });
-      if (animate) animateTo(target);
-      else set(target);
+      framing.current = () => cameraFor(box ?? { x: 0, y: 0, w: width, h: height });
+      if (animate) animateTo(framing.current());
+      else set(framing.current());
     },
     focus: (box) => {
       // Pad the box and stop at a readable zoom rather than filling the screen.
       const pad = Math.max(box.w, box.h) * 0.9 + 120;
-      animateTo(cameraFor({ x: box.x - pad / 2, y: box.y - pad / 2, w: box.w + pad, h: box.h + pad }, 1.6));
+      framing.current = () => cameraFor({ x: box.x - pad / 2, y: box.y - pad / 2, w: box.w + pad, h: box.h + pad }, 1.6);
+      animateTo(framing.current());
     },
     zoomBy: (factor) => {
       // Zoom about the middle of the unobstructed region, not the whole screen.
@@ -183,16 +186,28 @@ export function MapViewport({
       size.current = { w: Math.max(rect.width, 1), h: Math.max(rect.height, 1) };
       if (first) {
         first = false;
-        cam.current = clamp(cameraFor({ x: 0, y: 0, w: width, h: height }));
+        laidOut.current = true;
+        framing.current = () => cameraFor({ x: 0, y: 0, w: width, h: height });
+        cam.current = clamp(framing.current());
         setReady(true);
       } else {
-        cam.current = clamp(cam.current);
+        cam.current = clamp(framing.current ? framing.current() : cam.current);
       }
       apply();
     });
     observer.observe(host);
     return () => observer.disconnect();
   }, [apply, cameraFor, clamp, height, width]);
+
+  // When overlays come and go (a sheet opens, the story row collapses), keep
+  // whatever was framed framed in the space that's left; otherwise just keep
+  // the map covering it.
+  useEffect(() => {
+    insetsRef.current = insets;
+    if (!laidOut.current) return;
+    if (framing.current) animateTo(framing.current());
+    else set(cam.current);
+  }, [insets, animateTo, set]);
 
   useEffect(() => () => {
     stopAnimation();
@@ -236,7 +251,10 @@ export function MapViewport({
     const pts = [...pointers.current.values()];
     const x = pts.reduce((s, p) => s + p.x, 0) / pts.length;
     const y = pts.reduce((s, p) => s + p.y, 0) / pts.length;
-    if (Math.hypot(x - g.x, y - g.y) > TAP_SLOP || pts.length > 1) g.moved = true;
+    if (Math.hypot(x - g.x, y - g.y) > TAP_SLOP || pts.length > 1) {
+      g.moved = true;
+      framing.current = null;
+    }
     const { w, h } = size.current;
     let k = g.start.k;
     if (pts.length > 1 && g.dist > 0) {
@@ -297,8 +315,13 @@ export function MapViewport({
     const moves: Record<string, [number, number]> = { ArrowLeft: [-step, 0], ArrowRight: [step, 0], ArrowUp: [0, -step], ArrowDown: [0, step] };
     if (event.key === "+" || event.key === "=") zoomAround(w / 2, h / 2, 1.5, true);
     else if (event.key === "-") zoomAround(w / 2, h / 2, 1 / 1.5, true);
-    else if (event.key === "0") animateTo(cameraFor({ x: 0, y: 0, w: width, h: height }));
-    else if (moves[event.key]) animateTo({ ...cam.current, cx: cam.current.cx + moves[event.key][0], cy: cam.current.cy + moves[event.key][1] });
+    else if (event.key === "0") {
+      framing.current = () => cameraFor({ x: 0, y: 0, w: width, h: height });
+      animateTo(framing.current());
+    } else if (moves[event.key]) {
+      framing.current = null;
+      animateTo({ ...cam.current, cx: cam.current.cx + moves[event.key][0], cy: cam.current.cy + moves[event.key][1] });
+    }
     else return;
     event.preventDefault();
   };

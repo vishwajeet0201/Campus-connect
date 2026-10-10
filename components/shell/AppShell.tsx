@@ -131,6 +131,21 @@ export function AppShell() {
     measure();
     return () => { mutations.disconnect(); sizes.disconnect(); };
   }, []);
+  // The floating building/floor column on the right, measured, so the map frames itself clear of it.
+  const [toolsInset, setToolsInset] = useState(72);
+  const toolsRef = useCallback((tools: HTMLDivElement | null) => {
+    const shell = tools?.closest<HTMLElement>(".home-shell");
+    if (!tools || !shell) return;
+    const update = () => {
+      if (tools.hidden) return;
+      setToolsInset(Math.round(shell.getBoundingClientRect().right - tools.getBoundingClientRect().left) + 8);
+    };
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(tools);
+    observer.observe(shell);
+    return () => observer.disconnect();
+  }, []);
   const [storyIndex, setStoryIndex] = useState<number | null>(null);
   const [reportOpen, setReportOpen] = useState(false);
   const [stories, setStories] = useState<StoryItem[]>([]);
@@ -156,7 +171,7 @@ export function AppShell() {
   const selectedPlace = useMemo<NavPlace | null>(() => NAV_PLACES.find((place) => place.id === selectedFeatureId) ?? null, [selectedFeatureId]);
   const activeFloor = mapFloors.find((floor) => floor.id === activeFloorId);
   const guiding = Boolean(directions) || assistantOpen;
-  const mapInsets = useMemo(() => ({ top: chipsBottom + 8, right: guiding ? 12 : 72, bottom: Math.max(bottomPanel, 96) + 12, left: 64 }), [bottomPanel, chipsBottom, guiding]);
+  const mapInsets = useMemo(() => ({ top: chipsBottom + 8, right: guiding ? 12 : toolsInset, bottom: Math.max(bottomPanel, 96) + 12, left: 64 }), [bottomPanel, chipsBottom, guiding, toolsInset]);
 
   const activeStories = useMemo(() => stories.filter((story) => !isStoryExpired(story)), [stories]);
   const currentStory = storyIndex == null ? null : activeStories[storyIndex] ?? null;
@@ -582,7 +597,7 @@ export function AppShell() {
         </div>
       </div>
 
-      <div className="map-tools" hidden={guiding}>
+      <div ref={toolsRef} className="map-tools" hidden={guiding}>
         <GlassBar className="building-pill">
           {buildings.map((building) => (
             <button key={building.code} type="button" data-active={building.code === activeBuildingCode} onClick={() => switchBuilding(building.code)}>
