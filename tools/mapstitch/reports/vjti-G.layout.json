@@ -11,71 +11,79 @@
       "scale": 1.0,
       "x": -40.0,
       "y": -382.0,
-      "valid_px": 1795565,
-      "mismatch_fraction": 7.40713925700267e-05,
-      "edge_coverage": 0.9822398423356326
+      "valid_px": 1782421,
+      "compared_px": 197133,
+      "mismatch_fraction": 0.0006746714147301567,
+      "edge_coverage": 0.6193993106843919
     },
     {
       "file": "2.jpg",
       "scale": 1.0,
       "x": 736.0,
       "y": -337.0,
-      "valid_px": 1795565,
-      "mismatch_fraction": 0.004245460342566267,
-      "edge_coverage": 0.9995862211647875
+      "valid_px": 1782421,
+      "compared_px": 531255,
+      "mismatch_fraction": 0.014160807898278605,
+      "edge_coverage": 0.998868244836367
     },
     {
       "file": "3.jpg",
       "scale": 1.0,
       "x": 1344.0,
       "y": -303.0,
-      "valid_px": 1795565,
-      "mismatch_fraction": 0.002268366781486607,
-      "edge_coverage": 0.9914343333541238
+      "valid_px": 1782421,
+      "compared_px": 788866,
+      "mismatch_fraction": 0.005056625586601526,
+      "edge_coverage": 0.9723371076005153
     },
     {
       "file": "4.jpg",
       "scale": 1.0,
       "x": 1881.0,
       "y": -309.0,
-      "valid_px": 1795565,
-      "mismatch_fraction": 0.004595210978160078,
-      "edge_coverage": 0.9996570710053535
+      "valid_px": 1782421,
+      "compared_px": 663131,
+      "mismatch_fraction": 0.012327880916440341,
+      "edge_coverage": 0.9992993928070995
     },
     {
       "file": "5.jpg",
       "scale": 1.0,
       "x": 2570.0,
       "y": -315.0,
-      "valid_px": 1795565,
-      "mismatch_fraction": 0.00035197834664854794,
-      "edge_coverage": 0.9957668614752804
+      "valid_px": 1782421,
+      "compared_px": 391604,
+      "mismatch_fraction": 0.001593446440792229,
+      "edge_coverage": 0.9796270177088231
     },
     {
       "file": "6.jpg",
       "scale": 1.0,
-      "x": 3407.0,
+      "x": 3409.0,
       "y": -295.0,
-      "valid_px": 1795565,
+      "valid_px": 1782421,
+      "compared_px": 140848,
       "mismatch_fraction": 0.0,
       "edge_coverage": 1.0
     },
     {
       "file": "Screenshot_20261009_213957.jpg",
-      "scale": 2.00903,
-      "x": 3469.82,
-      "y": -1424.98,
-      "valid_px": 7222084,
-      "mismatch_fraction": 0.0009353255930005799,
-      "edge_coverage": 0.8174364802337852
+      "scale": 2.00741,
+      "x": 3472.14,
+      "y": -1422.66,
+      "valid_px": 7193777,
+      "compared_px": 3334157,
+      "mismatch_fraction": 0.0018919325034783905,
+      "edge_coverage": 0.8252843957930887
     },
     {
       "file": "Screenshot_20261009_214000.jpg",
-      "scale": 2.00903,
-      "x": 4588.85,
-      "y": -1543.51,
-      "valid_px": 7219966,
-      "mismatch_fraction": 4.293649028264122e-06,
+      "scale": 2.00741,
+      "x": 4590.27,
+      "y": -1541.1,
+      "valid_px": 7197172,
+      "compared_px": 1379027,
+      "mismatch_fraction": 1.8128724093146835e-05,
       "edge_coverage": 1.0
     }
   ],
@@ -153,43 +161,45 @@
       "to": "6.jpg",
       "status": "constrained",
       "scale": 1.0,
-      "dx": 837,
+      "dx": 839,
       "dy": 20,
-      "evidence": "Tile 6 shows only the uniform VJTI Hostels / path / Football Ground bands and their labels, and no screenshot shows those blocks' west edge (tile 5 x=614) together with anything east of it, so pixels cannot fix this seam's horizontal offset. dy is proven by residual (dy=20: every overlapping pixel agrees, all band edges coincide). dx is estimated from label placement: Screenshot_20261009_213957 (proven seam to tile 6, scale 2.009) shows both blocks' east edges, at tile-6 x=1170.2 (Hostels) and 1172.3 (Football Ground). If each label were centred on its block, the offset would be 827.7 (from 'VJTI Hostels') or 846.8 (from 'Football Ground'); dx=837 is their mean. The two disagree by 19px, and labels on wide features in this app sit left of centre (Cricket Ground: ~54px at this zoom; Textile Hall, Towards Mech Building: 10-17px), which would make the true offset larger, so treat dx as 837 +-30px. Hard bounds from pixels: dx >= 687 (neither label is visible in tile 5). A screenshot showing the hostel block's west edge and its label together would prove it.",
+      "evidence": "Tile 6 shows only the uniform VJTI Hostels / path / Football Ground bands and their two labels, and no screenshot shows those blocks' west ends (tile 5, x=612.5) together with anything east of tile 5's view, so pixels cannot fix this seam's horizontal offset. dy is proven by residual (dy=20: every overlapping pixel agrees and all band edges coincide). dx comes from where the labels sit. The west ends are fixed in tile 5 (outline/edge centres at x=612.2-612.7); the east ends are in Screenshot_20261009_213957, whose seam to tile 6 is proven, at tile-6 x=1174.9-1175.0; the label ink centres are at tile-6 x=478.0 (VJTI Hostels) and 470.0 (Football Ground). A label centred between the ends gives dx = west + east - 2 * label: 831.7 from 'VJTI Hostels' (assuming that label is centred on the west block of the stepped hostel outline, which has no dividing line at the step) and 847.1 from 'Football Ground' (both ends unambiguous). dx=839 is their mean. A label sitting b px left of its block's centre would mean a smaller dx (dx = 847 - 2b or 832 - 2b), but across 192 labelled rectangular blocks on all floors label offsets have median 0 and 87% are within 3px of centre, so no bias is assumed. The two values disagree by 15px, so at least one label is about 7px off centre; treat dx as 839 +-30px. Hard bound from pixels: dx >= 687 (neither label is visible in tile 5). One zoomed-out screenshot showing the hostel block's west end and its label together would prove it.",
       "refined_axes": [
         "dy"
       ],
       "stats": {
-        "overlap_px": 298424,
+        "overlap_px": 295027,
         "mismatch_fraction": 0.0,
-        "mean_abs_diff": 0.14144639841299628,
-        "edges_a": 875,
-        "edges_b": 877,
-        "matched_edges": 705,
-        "edge_agreement": 0.8976158898517148
+        "mean_abs_diff": 0.14162771542943528,
+        "edges_a": 865,
+        "edges_b": 867,
+        "matched_edges": 697,
+        "edge_agreement": 0.8976526871907694
       }
     },
     {
       "from": "6.jpg",
       "to": "Screenshot_20261009_213957.jpg",
       "status": "proven",
-      "scale": 2.009030115277417,
-      "dx": 62.81718445090539,
-      "dy": -1129.9795537957568,
+      "scale": 2.0074051239182285,
+      "dx": 63.14391131373523,
+      "dy": -1127.6637934339565,
       "stats": {
-        "overlap_px": 400290,
-        "mismatch_fraction": 0.003085263184191461,
-        "mean_abs_diff": 0.8694746308926029,
+        "overlap_px": 400274,
+        "mismatch_fraction": 0.0015914098842293029,
+        "mean_abs_diff": 0.7647936163727846,
         "edges_a": 3607,
-        "edges_b": 3969,
+        "edges_b": 3907,
         "matched_edges": 3605,
-        "edge_agreement": 0.9406756290307104
+        "edge_agreement": 0.9397087078408706
       },
       "zoom_fit": {
-        "method": "Gauss-Newton fit of zoom + shift over the overlap's pixels",
-        "swept_scale": 0.498,
-        "cells": 72,
-        "scale_sd": 0.000282
+        "method": "Gauss-Newton fit of zoom + shift over the overlap's pixels (colour)",
+        "swept_scale": 2.0080321285140563,
+        "cells": 71,
+        "scale_sd": 0.000592,
+        "channel_spread": 0.00465,
+        "uncertainty": 0.002325
       },
       "sift_inliers": 23,
       "verified_in": "the zoomed-out tile's frame"
@@ -213,6 +223,35 @@
     }
   ],
   "uncovered_fraction": 0.0175,
+  "open_edges": [
+    {
+      "side": "bottom",
+      "bbox": [
+        732,
+        1676,
+        43,
+        42
+      ]
+    },
+    {
+      "side": "bottom",
+      "bbox": [
+        535,
+        1727,
+        778,
+        54
+      ]
+    },
+    {
+      "side": "bottom",
+      "bbox": [
+        1741,
+        1806,
+        314,
+        9
+      ]
+    }
+  ],
   "resampled_tiles": {
     "Screenshot_20261009_213957.jpg": "received at 923x2000, resampled to 1080x2340",
     "Screenshot_20261009_214000.jpg": "received at 923x2000, resampled to 1080x2340"

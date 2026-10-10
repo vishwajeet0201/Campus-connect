@@ -61,12 +61,12 @@ any misalignment, which each seam's own overlap test settles.
 
 | Floor | Tiles | Seams | Notes |
 | --- | --- | --- | --- |
-| VJTI G | 8 | 6 proven, 1 constrained | Tile 6 shows only the uniform Hostels / Football Ground bands: its vertical offset is proven, its horizontal offset is estimated from where the two labels sit on their blocks, 837 ± 30px (see `stitch.json`). The last two screenshots (resampled, zoomed out 2.009x) add the blocks' east ends, the Cricket Ground and Gate 5. |
-| VJTI 1 | 4 | 3 proven | tile 4 is zoomed 1.0036x |
+| VJTI G | 8 | 6 proven, 1 constrained | Tile 6 shows only the uniform Hostels / Football Ground bands: its vertical offset is proven, its horizontal offset is estimated from where the two labels sit on their blocks, 839 ± 30px (see `stitch.json`). The last two screenshots (resampled, zoomed out 2.007x ± 0.0023: only two labels and the band edges pin that zoom) add the blocks' east ends, the Cricket Ground and Gate 5. Open edge: the Textile Garden's south side. |
+| VJTI 1 | 4 | 3 proven | tile 4 is zoomed 1.0036x. The floating buttons' holes cut small corners off two rooms at the bottom edge. |
 | VJTI 2 | 2 | 1 proven | |
 | VJTI 3 | 1 | — | |
-| Mech G | 3 | 2 proven | |
-| Mech 1 | 3 | 2 proven | The third screenshot (resampled, zoomed out 1.125x) bridges the first two, which then line up at the same zoom. |
+| Mech G | 3 | 2 proven | Open edge: the open area and DL 001 run on past the east edge. |
+| Mech 1 | 3 | 2 proven | The third screenshot (resampled, zoomed out 1.125x) bridges the first two, which then line up at the same zoom. Open edge: the Staff Room runs on past the west edge. |
 | Mech 2 | 3 | 2 proven | zoom changes of 0.746x and 1.432x |
 | Mech 3, TPO | 1 each | — | |
 

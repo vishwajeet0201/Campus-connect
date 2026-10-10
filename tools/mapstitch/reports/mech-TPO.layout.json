@@ -11,11 +11,13 @@
       "scale": 1.0,
       "x": -53.0,
       "y": -895.0,
-      "valid_px": 1795565,
-      "mismatch_fraction": 0.0,
-      "edge_coverage": 1.0
+      "valid_px": 1782421,
+      "compared_px": 0,
+      "mismatch_fraction": null,
+      "edge_coverage": null
     }
   ],
   "seams": [],
-  "uncovered_fraction": 0.0
+  "uncovered_fraction": 0.0,
+  "open_edges": []
 }

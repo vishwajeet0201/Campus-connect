@@ -53,8 +53,10 @@ ground floor as a vector plan with search, room details and walking directions.
   proven.
 * VJTI ground floor: the south edge of the Textile Garden is in no screenshot;
   it's drawn to the last visible pixel and faded.
-* Mech 1st floor: the Staff Room and the rooms north of it run off the west
-  edge of the screenshots; their west walls aren't shown.
+* Some floors run on past their screenshots: the Mech ground floor's east end
+  (open area, DL 001), the Mech 1st floor's west end (Staff Room) and two
+  room corners under the floating buttons on VJTI 1st floor. Areas no
+  screenshot shows are hatched, so a room cut off there reads as unseen.
 * Rooms with no drawn door (building blocks, the stage, fields) get inferred
   entrances on every side facing walkable space; the sheet says so.
 * The source map has no scale, so routes give no distances or times. Walkable
