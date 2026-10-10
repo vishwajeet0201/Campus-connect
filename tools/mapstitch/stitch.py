@@ -181,10 +181,13 @@ def refine_zoom(a, ma, b, mb, s: float, dx: int, dy: int) -> dict:
             continue
     sd = float(np.std(boot) * s)
     spread = float((max(by_channel) - min(by_channel)) * s) if len(by_channel) > 1 else 0.0
+    # Neither sees model mismatch (interpolation, prefiltering); on synthetic
+    # warps that is worth up to ~5e-5 of zoom, so that is the floor.
+    floor = 5e-5 * s
     return {"scale": float(s), "dx": float(tx), "dy": float(ty), "stats": st, "zoom_fit": {
         "method": "Gauss-Newton fit of zoom + shift over the overlap's pixels (colour)",
         "swept_scale": swept["scale"], "cells": len(normals), "scale_sd": round(sd, 6),
-        "channel_spread": round(spread, 6), "uncertainty": round(max(sd, spread / 2), 6)}}
+        "channel_spread": round(spread, 6), "uncertainty": round(max(sd, spread / 2, floor), 6)}}
 
 
 def sweep_scale(a, ma, b, mb, dx: int, dy: int, centre: float, span: float, step: float):
@@ -306,36 +309,69 @@ def seam_check(images, masks, transforms, j: int, i: int) -> dict:
 
 
 def snap_native_zoom(images, masks, transforms, tiles, seams, resampled) -> dict:
-    """A native screenshot whose chained zoom comes out within NATIVE_ZOOM_TOL of
-    1 (e.g. one reached through a zoomed bridging tile, whose zoom the overlap
-    only pins to ~0.1%) is placed at zoom 1, pixel for pixel, anchored on its
-    seam overlap, if every seam it is part of still proves. Modifies
-    transforms in place; returns {tile index: {zoom before, re-verified seams}}."""
+    """A native screenshot whose zoom was inherited through a resampled tile or
+    a zoomed seam (a bridge, whose zoom the overlap pins only to ~0.1%) and
+    comes out within NATIVE_ZOOM_TOL of 1 is placed at zoom 1, pixel for pixel,
+    anchored on its overlap with the tile it was placed against. Everything
+    placed through it moves with it, so their seams keep their measured
+    placement; seams between moved and unmoved tiles must still prove.
+    Modifies transforms in place; returns {tile index: details}."""
     index = {t.name: k for k, t in enumerate(tiles)}
+    parent = {index[q["to"]]: (index[q["from"]], q) for q in seams}
+    children: dict[int, list[int]] = {}
+    for c, (p, _) in parent.items():
+        children.setdefault(p, []).append(c)
+
+    def bridged(i: int) -> bool:
+        while i in parent:
+            j, q = parent[i]
+            if tiles[j].name in resampled or abs(q["scale"] - 1) > NATIVE_ZOOM_TOL:
+                return True
+            i = j
+        return False
+
+    def subtree(i: int) -> list[int]:
+        out, todo = [], [i]
+        while todo:
+            k = todo.pop()
+            out.append(k)
+            todo += children.get(k, [])
+        return out
+
+    eligible = {i for i in range(len(tiles)) if i in parent and tiles[i].name not in resampled and bridged(i)}
+    order = sorted(range(len(tiles)), key=lambda i: _depth(i, parent))  # parents first
     snapped = {}
-    for i, (s, tx, ty) in enumerate(transforms):
-        if s == 1.0 or abs(s - 1) > NATIVE_ZOOM_TOL or tiles[i].name in resampled:
+    for i in order:
+        s, tx, ty = transforms[i]
+        if i not in eligible or s == 1.0 or abs(s - 1) > NATIVE_ZOOM_TOL:
             continue
-        links = [(index[q["from"]], index[q["to"]]) for q in seams if q["status"] == "proven" and tiles[i].name in (q["from"], q["to"])]
-        parent = next((index[q["from"]] for q in seams if q["to"] == tiles[i].name), None)
-        # Only a zoom inherited through a non-native tile (a resampled or zoomed
-        # bridge) is suspect; a zoom measured against a native neighbour is real.
-        if not links or parent is None or (tiles[parent].name not in resampled and transforms[parent][0] == 1.0):
-            continue
-        # Keep the middle of the overlap with the tile it was placed against fixed.
-        j = parent
+        j = parent[i][0]
         sj, xj, yj = transforms[j]
         hi, wi = images[i].shape[:2]
         hj, wj = images[j].shape[:2]
         cx = (max(tx, xj) + min(tx + wi * s, xj + wj * sj)) / 2
         cy = (max(ty, yj) + min(ty + hi * s, yj + hj * sj)) / 2
+        nx, ny = cx - (cx - tx) / s, cy - (cy - ty) / s
+        moved = subtree(i)
         trial = list(transforms)
-        trial[i] = (1.0, cx - (cx - tx) / s, cy - (cy - ty) / s)
-        checks = {f"{tiles[a].name}->{tiles[b].name}": seam_check(images, masks, trial, a, b) for a, b in links}
-        if all(accept(st) for st in checks.values()):
-            transforms[i] = trial[i]
-            snapped[i] = {"zoom_before": round(s, 6), "reverified": checks}
+        for k in moved:  # the same similarity for the whole subtree
+            sk, xk, yk = transforms[k]
+            trial[k] = (sk / s, nx + (xk - tx) / s, ny + (yk - ty) / s)
+        trial[i] = (1.0, nx, ny)
+        cut = [(index[q["from"]], index[q["to"]]) for q in seams if q["status"] == "proven"
+               and (index[q["from"]] in moved) != (index[q["to"]] in moved)]
+        checks = {f"{tiles[a].name}->{tiles[b].name}": seam_check(images, masks, trial, a, b) for a, b in cut}
+        if checks and all(accept(st) for st in checks.values()):
+            transforms[:] = trial
+            snapped[i] = {"zoom_before": round(s, 6), "moved_with_it": [tiles[k].name for k in moved if k != i], "reverified": checks}
     return snapped
+
+
+def _depth(i: int, parent: dict) -> int:
+    d = 0
+    while i in parent:
+        i, d = parent[i][0], d + 1
+    return d
 
 
 def warp_tile(img, mask, s: float, tx: float, ty: float, W: int, H: int):
@@ -409,7 +445,16 @@ def find_open_edges(image, covered) -> list[dict]:
     on there, so the floor is incomplete at that edge."""
     content = (image.min(axis=2) < 235) & covered
     unseen = cv2.dilate((~covered).astype(np.uint8), np.ones((3, 3), np.uint8)).astype(bool)
-    touch = (content & unseen).astype(np.uint8)
+    # Content that merely ends at the unseen area (a gate box's own bottom edge)
+    # isn't open: it must look the same a few pixels further in.
+    depth = cv2.distanceTransform(covered.astype(np.uint8), cv2.DIST_L2, 3)
+    img = image.astype(np.int16)
+    same_inside = np.zeros_like(covered)
+    for dx, dy in ((4, 0), (-4, 0), (0, 4), (0, -4)):
+        shifted = np.roll(np.roll(img, -dy, axis=0), -dx, axis=1)
+        deeper = np.roll(np.roll(depth, -dy, axis=0), -dx, axis=1) > depth + 2
+        same_inside |= deeper & (np.abs(shifted - img).max(axis=2) < 25)
+    touch = (content & unseen & same_inside).astype(np.uint8)
     n, _, stats, _ = cv2.connectedComponentsWithStats(cv2.dilate(touch, np.ones((9, 9), np.uint8)), connectivity=8)
     H, W = covered.shape
     edges = []
@@ -522,10 +567,11 @@ def main() -> int:
     transforms = [transforms[i] for i in range(len(images))]
     snapped = snap_native_zoom(images, masks, transforms, tiles, seams, resampled)
     index = {t.name: k for k, t in enumerate(tiles)}
+    moved = set(snapped) | {index[name] for v in snapped.values() for name in v["moved_with_it"]}
     for q in seams:
         # A snapped tile's seam no longer chains to where it was drawn: record both.
         j, i = index[q["from"]], index[q["to"]]
-        if i in snapped or j in snapped:
+        if (i in moved) != (j in moved):
             (sj, xj, yj), (si, xi, yi) = transforms[j], transforms[i]
             q["after_native_zoom_snap"] = {"scale": si / sj, "dx": (xi - xj) / sj, "dy": (yi - yj) / sj}
 
