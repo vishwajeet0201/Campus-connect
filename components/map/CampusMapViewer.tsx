@@ -164,7 +164,15 @@ export function CampusMapViewer({
           </>
         ) : (
           <>
-            <rect width={width} height={height} fill="#ffffff" />
+            {/* Stitched images are transparent where no screenshot reached: hatch
+                those areas so a room cut off there reads as unseen, not as ending. */}
+            <defs>
+              <pattern id="unseen-hatch" width="14" height="14" patternUnits="userSpaceOnUse" patternTransform="rotate(45)">
+                <rect width="14" height="14" fill="#f4f5f7" />
+                <rect width="2" height="14" fill="#dde1e7" />
+              </pattern>
+            </defs>
+            <rect width={width} height={height} fill={image?.width ? "url(#unseen-hatch)" : "#ffffff"} />
             {src && <image href={src} width={width} height={height} preserveAspectRatio="none" />}
             {fallbackPois.map((poi) => (
               <g key={poi.id} data-poi={poi.id} role="button" aria-label={poi.name} transform={`translate(${poi.x} ${poi.y}) scale(${1 / scale})`} className="plan-poi" data-selected={selectedPoiId === poi.id || undefined}>
