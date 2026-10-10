@@ -91,73 +91,73 @@ def placed_stats(a, ma, b, mb, s: float, tx: float, ty: float) -> dict:
     return overlap_stats(a, ma, bw, mbw, 0, 0)
 
 
-def block_shifts(a, ma, bw, mbw, size: int = 96, step: int = 48):
-    """Sub-pixel shift of bw against a in every block that has detail in both
-    directions (a corner, a glyph), so each one pins x and y."""
-    ga = cv2.GaussianBlur(cv2.cvtColor(a, cv2.COLOR_BGR2GRAY).astype(np.float32), (0, 0), 1.0)
-    gb = cv2.GaussianBlur(cv2.cvtColor(bw, cv2.COLOR_BGR2GRAY).astype(np.float32), (0, 0), 1.0)
-    gx, gy = cv2.Sobel(ga, cv2.CV_32F, 1, 0), cv2.Sobel(ga, cv2.CV_32F, 0, 1)
-    valid = (ma > 0) & (mbw > 0)
-    win = cv2.createHanningWindow((size, size), cv2.CV_32F)
-    out = []
-    h, w = ga.shape
-    for y in range(0, h - size + 1, step):
-        for x in range(0, w - size + 1, step):
-            if not valid[y:y + size, x:x + size].all():
-                continue
-            jx, jy = gx[y:y + size, x:x + size], gy[y:y + size, x:x + size]
-            sxx, syy, sxy = float((jx * jx).sum()), float((jy * jy).sum()), float((jx * jy).sum())
-            weakest = (sxx + syy) / 2 - np.sqrt(((sxx - syy) / 2) ** 2 + sxy ** 2)
-            if weakest < 2e6:
-                continue
-            (dx, dy), resp = cv2.phaseCorrelate(ga[y:y + size, x:x + size], gb[y:y + size, x:x + size], win)
-            if resp > 0.3 and abs(dx) < 3 and abs(dy) < 3:
-                out.append((x + size / 2, y + size / 2, dx, dy))
-    return np.array(out, np.float64).reshape(-1, 4)
+def zoom_normals(a, ma, bw, mbw, cell: int = 64):
+    """Gauss-Newton normal equations for the residual offset of placed bw
+    against a, modelled as k * (position - centre) + (ux, uy), accumulated per
+    cell of the overlap (so their spread can be bootstrapped). Straight edges
+    constrain only across themselves, corners and glyphs both ways."""
+    ga = cv2.GaussianBlur(cv2.cvtColor(a, cv2.COLOR_BGR2GRAY).astype(np.float32), (0, 0), 1.5)
+    gb = cv2.GaussianBlur(cv2.cvtColor(bw, cv2.COLOR_BGR2GRAY).astype(np.float32), (0, 0), 1.5)
+    gx, gy = cv2.Sobel(gb, cv2.CV_32F, 1, 0, ksize=1, scale=0.5), cv2.Sobel(gb, cv2.CV_32F, 0, 1, ksize=1, scale=0.5)
+    e = ga - gb
+    valid = cv2.erode(((ma > 0) & (mbw > 0)).astype(np.uint8), np.ones((7, 7), np.uint8)).astype(bool)
+    valid &= np.abs(e) < 60  # not a feature one tile lacks (e.g. a shadow remnant)
+    ys, xs = np.nonzero(valid)
+    if len(xs) < 1000:
+        return None
+    cx, cy = float(xs.mean()), float(ys.mean())
+    gxs, gys, es = gx[ys, xs].astype(np.float64), gy[ys, xs].astype(np.float64), e[ys, xs].astype(np.float64)
+    J = np.stack([gxs * (xs - cx) + gys * (ys - cy), gxs, gys], axis=1)
+    cells = (ys // cell) * (a.shape[1] // cell + 1) + xs // cell
+    order = np.argsort(cells)
+    bounds = np.flatnonzero(np.diff(cells[order])) + 1
+    normals = []
+    for idx in np.split(order, bounds):
+        Jc = J[idx]
+        if np.abs(Jc).sum() > 0:
+            normals.append((Jc.T @ Jc, Jc.T @ es[idx]))
+    return normals, (cx, cy)
+
+
+def solve_normals(normals):
+    N = sum(n for n, _ in normals)
+    r = sum(v for _, v in normals)
+    return np.linalg.solve(N + 1e-9 * np.eye(3) * np.trace(N), r)
 
 
 def refine_zoom(a, ma, b, mb, s: float, dx: int, dy: int) -> dict:
     """Sub-pixel zoom and shift for b, from the integer-shift sweep's best (b
     zoomed by s at (dx, dy)). An integer shift can't follow the drift a 0.1%
     zoom error causes across the overlap, so the sweep alone doesn't pin the
-    zoom. Instead, measure how far every detailed block of the overlap is still
-    off, fit one zoom + shift to those block offsets, and repeat; the fit is
-    kept only if it verifies at least as well as the sweep."""
+    zoom. Gauss-Newton over every overlap pixel fits the remaining offset as
+    one zoom + shift, re-placing b until it stops moving; the fit is kept only
+    if it verifies at least as well as the sweep. Its zoom uncertainty comes
+    from a bootstrap over 64px cells of the overlap."""
     o = zoom_offset(s)
     tx, ty = dx + o, dy + o
     swept = {"scale": s, "dx": tx, "dy": ty, "stats": placed_stats(a, ma, b, mb, s, tx, ty)}
-    for _ in range(4):
+    for _ in range(20):
         bw, mbw = place(b, mb, s, tx, ty, a.shape)
-        d = block_shifts(a, ma, bw, mbw)
-        if len(d) < 8 or np.ptp(d[:, 0]) + np.ptp(d[:, 1]) < 300:
-            return swept  # too little detail spread over the overlap to pin a zoom
-        cx, cy = d[:, 0].mean(), d[:, 1].mean()
-        # Block offset = k * (position - centre) + (ux, uy), both axes stacked.
-        A = np.zeros((2 * len(d), 3))
-        A[0::2, 0], A[0::2, 1] = d[:, 0] - cx, 1
-        A[1::2, 0], A[1::2, 2] = d[:, 1] - cy, 1
-        rhs = d[:, 2:4].reshape(-1)
-        keep = np.ones(len(rhs), bool)
-        for _ in range(3):  # drop outlying blocks (repeated patterns, text edges)
-            sol, *_ = np.linalg.lstsq(A[keep], rhs[keep], rcond=None)
-            res = rhs - A @ sol
-            keep = np.abs(res) <= max(0.25, 3 * np.median(np.abs(res[keep])))
-        k, ux, uy = sol
-        # bw's content sits (offset) away from a's: move it back.
+        got = zoom_normals(a, ma, bw, mbw)
+        if got is None or len(got[0]) < 8:
+            return swept
+        normals, (cx, cy) = got
+        k, ux, uy = solve_normals(normals)
+        if abs(k) > 0.01 or abs(ux) > 5 or abs(uy) > 5:
+            return swept  # diverging: the start wasn't close enough
+        # bw's content sits k * (x - c) + u away from a's: move it back.
         tx, ty = (1 - k) * tx + k * cx - ux, (1 - k) * ty + k * cy - uy
         s *= 1 - k
-        dof = max(1, keep.sum() - 3)
-        sigma = np.sqrt((res[keep] ** 2).sum() / dof)
-        cov = sigma ** 2 * np.linalg.inv(A[keep].T @ A[keep])
-        if abs(k) < 2e-5 and abs(ux) < 0.05 and abs(uy) < 0.05:
+        if abs(k) < 1e-6 and abs(ux) < 0.005 and abs(uy) < 0.005:
             break
     st = placed_stats(a, ma, b, mb, s, tx, ty)
-    if not accept(st) or st["mean_abs_diff"] > swept["stats"]["mean_abs_diff"] + 0.05:
+    if (accept(swept["stats"]) and not accept(st)) or st["mean_abs_diff"] > swept["stats"]["mean_abs_diff"] + 0.05:
         return swept
+    rng = np.random.default_rng(0)
+    boot = [solve_normals([normals[i] for i in rng.integers(0, len(normals), len(normals))])[0] for _ in range(200)]
     return {"scale": float(s), "dx": float(tx), "dy": float(ty), "stats": st, "zoom_fit": {
-        "method": "least-squares fit of zoom + shift to sub-pixel offsets of detailed blocks",
-        "swept_scale": swept["scale"], "blocks": int(keep.sum() // 2), "residual_px": round(float(sigma), 3),
-        "scale_sd": float(np.sqrt(cov[0, 0]) * s)}}
+        "method": "Gauss-Newton fit of zoom + shift over the overlap's pixels",
+        "swept_scale": swept["scale"], "cells": len(normals), "scale_sd": round(float(np.std(boot) * s), 6)}}
 
 
 def sweep_scale(a, ma, b, mb, dx: int, dy: int, centre: float, span: float, step: float):
@@ -192,12 +192,11 @@ def register(a, ma, b, mb) -> dict:
         # it only when it clearly beats 1.0.
         s, sx, sy, sst = sweep_scale(a, ma, b, mb, dx, dy, 1.0, 0.012, 0.001)
         s, sx, sy, sst = sweep_scale(a, ma, b, mb, sx, sy, s, 0.001, 0.00025) if s != 1.0 else (s, sx, sy, sst)
-        zoom = {}
-        if s != 1.0 and accept(sst) and (not accept(st) or sst["mismatch_fraction"] < 0.5 * st["mismatch_fraction"]):
-            zoom = refine_zoom(a, ma, b, mb, s, sx, sy)
+        zoom = refine_zoom(a, ma, b, mb, s, sx, sy) if s != 1.0 else {"stats": {}}
+        if accept(zoom["stats"]) and (not accept(st) or zoom["stats"]["mismatch_fraction"] < 0.5 * st["mismatch_fraction"]):
             dx, dy, st, scale = zoom.pop("dx"), zoom.pop("dy"), zoom.pop("stats"), zoom.pop("scale")
         else:
-            scale = 1.0
+            zoom, scale = {}, 1.0
         if accept(st):
             result = {"status": "proven", "scale": scale, "dx": dx, "dy": dy, "stats": st, **zoom}
             # A rival offset is a real alternative only if it fits about as well
@@ -240,9 +239,12 @@ def _register_zoomed(a, ma, b, mb, est) -> dict | None:
         return None
     s, sx, sy, sst = sweep_scale(a, ma, b, mb, best[0], best[1], round(est[0], 3), 0.008, 0.001)
     s, sx, sy, sst = sweep_scale(a, ma, b, mb, sx, sy, s, 0.001, 0.00025)
-    if accept(sst):
-        return {"status": "proven", **refine_zoom(a, ma, b, mb, s, sx, sy), "sift_inliers": est[1]}
-    return {"status": "unresolved", "reason": f"zoomed tile (scale ~{est[0]:.3f}) did not verify", "best": {"scale": s, "dx": sx, "dy": sy, "stats": sst}}
+    # The sweep's shifts are whole pixels; at a large zoom difference half a
+    # pixel decides the edge test, so judge the sub-pixel fit.
+    zoom = refine_zoom(a, ma, b, mb, s, sx, sy)
+    if accept(zoom["stats"]):
+        return {"status": "proven", **zoom, "sift_inliers": est[1]}
+    return {"status": "unresolved", "reason": f"zoomed tile (scale ~{est[0]:.3f}) did not verify", "best": {k: zoom[k] for k in ("scale", "dx", "dy", "stats")}}
 
 
 def seam_check(images, masks, transforms, j: int, i: int) -> dict:
