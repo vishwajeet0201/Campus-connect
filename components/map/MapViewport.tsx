@@ -58,6 +58,7 @@ export function MapViewport({
   const frame = useRef<number | null>(null);
   const [ready, setReady] = useState(false);
   const laidOut = useRef(false);
+  const pointers = useRef(new Map<number, { x: number; y: number }>());
   // What the camera was last asked to frame (the floor, a feature, a route),
   // as a function of the insets, until the user pans or zooms themselves.
   const framing = useRef<(() => Camera) | null>(null);
@@ -205,7 +206,8 @@ export function MapViewport({
   useEffect(() => {
     insetsRef.current = insets;
     if (!laidOut.current) return;
-    if (framing.current) animateTo(framing.current());
+    // Mid-gesture, only keep the map covering the new region; never animate under a finger.
+    if (framing.current && pointers.current.size === 0) animateTo(framing.current());
     else set(cam.current);
   }, [insets, animateTo, set]);
 
@@ -215,7 +217,6 @@ export function MapViewport({
   }, []);
 
   // Pointer gestures: one pointer pans, two pinch-zoom around their midpoint.
-  const pointers = useRef(new Map<number, { x: number; y: number }>());
   const gesture = useRef<{ start: Camera; x: number; y: number; dist: number; moved: boolean; t: number; target: Element | null } | null>(null);
   const lastTap = useRef<{ t: number; x: number; y: number } | null>(null);
 
@@ -251,9 +252,11 @@ export function MapViewport({
     const pts = [...pointers.current.values()];
     const x = pts.reduce((s, p) => s + p.x, 0) / pts.length;
     const y = pts.reduce((s, p) => s + p.y, 0) / pts.length;
-    if (Math.hypot(x - g.x, y - g.y) > TAP_SLOP || pts.length > 1) {
+    if (!g.moved && (Math.hypot(x - g.x, y - g.y) > TAP_SLOP || pts.length > 1)) {
+      // The user has taken over: drop any framing and any reframe in flight.
       g.moved = true;
       framing.current = null;
+      stopAnimation();
     }
     const { w, h } = size.current;
     let k = g.start.k;
