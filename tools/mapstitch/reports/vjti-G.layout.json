@@ -2,7 +2,7 @@
   "source": "/home/user/Campus-connect/map-source/vjti-ground-floor",
   "image": "vjti-G.png",
   "size": [
-    6226,
+    6233,
     1835
   ],
   "tiles": [
@@ -52,34 +52,34 @@
       "x": 2570.0,
       "y": -315.0,
       "valid_px": 1782421,
-      "compared_px": 391604,
-      "mismatch_fraction": 0.001593446440792229,
-      "edge_coverage": 0.9796270177088231
+      "compared_px": 386001,
+      "mismatch_fraction": 0.0016165761228597853,
+      "edge_coverage": 0.9800502670436695
     },
     {
       "file": "6.jpg",
       "scale": 1.0,
-      "x": 3409.0,
+      "x": 3416.0,
       "y": -295.0,
       "valid_px": 1782421,
-      "compared_px": 140848,
+      "compared_px": 134543,
       "mismatch_fraction": 0.0,
       "edge_coverage": 1.0
     },
     {
       "file": "Screenshot_20261009_213957.jpg",
       "scale": 2.00741,
-      "x": 3472.14,
+      "x": 3479.14,
       "y": -1422.66,
       "valid_px": 7193777,
-      "compared_px": 3334157,
-      "mismatch_fraction": 0.0018919325034783905,
-      "edge_coverage": 0.8252843957930887
+      "compared_px": 3334017,
+      "mismatch_fraction": 0.0018920119483493935,
+      "edge_coverage": 0.8253031441141754
     },
     {
       "file": "Screenshot_20261009_214000.jpg",
       "scale": 2.00741,
-      "x": 4590.27,
+      "x": 4597.27,
       "y": -1541.1,
       "valid_px": 7197172,
       "compared_px": 1379027,
@@ -161,20 +161,20 @@
       "to": "6.jpg",
       "status": "constrained",
       "scale": 1.0,
-      "dx": 839,
+      "dx": 846,
       "dy": 20,
-      "evidence": "Tile 6 shows only the uniform VJTI Hostels / path / Football Ground bands and their two labels, and no screenshot shows those blocks' west ends (tile 5, x=612.5) together with anything east of tile 5's view, so pixels cannot fix this seam's horizontal offset. dy is proven by residual (dy=20: every overlapping pixel agrees and all band edges coincide). dx comes from where the labels sit. The west ends are fixed in tile 5 (outline/edge centres at x=612.2-612.7); the east ends are in Screenshot_20261009_213957, whose seam to tile 6 is proven, at tile-6 x=1174.9-1175.0; the label ink centres are at tile-6 x=478.0 (VJTI Hostels) and 470.0 (Football Ground). A label centred between the ends gives dx = west + east - 2 * label: 831.7 from 'VJTI Hostels' (assuming that label is centred on the west block of the stepped hostel outline, which has no dividing line at the step) and 847.1 from 'Football Ground' (both ends unambiguous). dx=839 is their mean. A label sitting b px left of its block's centre would mean a smaller dx (dx = 847 - 2b or 832 - 2b), but across 192 labelled rectangular blocks on all floors label offsets have median 0 and 87% are within 3px of centre, so no bias is assumed. The two values disagree by 15px, so at least one label is about 7px off centre; treat dx as 839 +-30px. Hard bound from pixels: dx >= 687 (neither label is visible in tile 5). One zoomed-out screenshot showing the hostel block's west end and its label together would prove it.",
+      "evidence": "Tile 6 shows only the uniform VJTI Hostels / path / Football Ground bands and their two labels, and no screenshot shows those blocks' west ends (in tile 5) together with anything east of tile 5's view, so pixels cannot fix this seam's horizontal offset. dy is proven by residual (dy=20: every overlapping pixel agrees and all band edges coincide). dx comes from where the Football Ground's label sits on its block. The block's west end is fixed in tile 5 (fill edge at x=612.1); its east end is in Screenshot_20261009_213957, whose seam to tile 6 is proven, at tile-6 x=1174.3 (colour-channel midpoints; 1174.5 in luminance); the label's ink centre is at tile-6 x=470.0. A label centred between the ends gives dx = west + east - 2 * label = 846.4. The Football Ground is a near-perfect rectangle (fill ratio 0.996) and its label is centred vertically to 0.3px; across 192 labelled rectangular blocks on all floors, label offsets have median 0 and 87% are within 3px of centre (a label b px off centre moves dx by 2b). So dx = 846 +-10. The 'VJTI Hostels' label gives 830.7 (west outline 612.6, east end 1173.1-1175.1 depending on colour channel, ink centre 478.0) but is not used: the hostel is a stepped polygon, and labels on non-rectangular shapes are not box-centred in this map (that label sits 5px above its west block's centre; the trapezoidal Cricket Ground's sits 94px left of and 69px below its box centre). Hard bound from pixels: dx >= 687 (neither label is visible in tile 5). One zoomed-out screenshot showing the blocks' west ends and their labels together would prove it.",
       "refined_axes": [
         "dy"
       ],
       "stats": {
-        "overlap_px": 295027,
+        "overlap_px": 283062,
         "mismatch_fraction": 0.0,
-        "mean_abs_diff": 0.14162771542943528,
-        "edges_a": 865,
-        "edges_b": 867,
-        "matched_edges": 697,
-        "edge_agreement": 0.8976526871907694
+        "mean_abs_diff": 0.14215613540496427,
+        "edges_a": 830,
+        "edges_b": 832,
+        "matched_edges": 669,
+        "edge_agreement": 0.8977884474560486
       }
     },
     {
@@ -222,7 +222,7 @@
       }
     }
   ],
-  "uncovered_fraction": 0.0175,
+  "uncovered_fraction": 0.0176,
   "open_edges": [
     {
       "side": "bottom",
@@ -240,15 +240,6 @@
         1727,
         778,
         54
-      ]
-    },
-    {
-      "side": "bottom",
-      "bbox": [
-        1741,
-        1806,
-        314,
-        9
       ]
     }
   ],

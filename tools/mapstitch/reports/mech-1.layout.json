@@ -27,6 +27,7 @@
       "edge_coverage": null,
       "native_zoom_snap": {
         "zoom_before": 1.000342,
+        "moved_with_it": [],
         "reverified": {
           "Screenshot_20261009_213824.jpg->Screenshot_20261007_131141.jpg": {
             "overlap_px": 576999,

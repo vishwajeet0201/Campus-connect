@@ -104,7 +104,7 @@
         "cells": 281,
         "scale_sd": 1.1e-05,
         "channel_spread": 1.1e-05,
-        "uncertainty": 1.1e-05
+        "uncertainty": 5e-05
       }
     }
   ],
@@ -123,27 +123,27 @@
       "side": "right",
       "bbox": [
         2407,
-        1727,
-        59,
-        88
-      ]
-    },
-    {
-      "side": "bottom",
-      "bbox": [
-        1485,
-        1763,
-        53,
-        12
-      ]
-    },
-    {
-      "side": "bottom",
-      "bbox": [
-        1621,
-        1763,
+        1731,
         57,
-        17
+        84
+      ]
+    },
+    {
+      "side": "bottom",
+      "bbox": [
+        1488,
+        1763,
+        47,
+        11
+      ]
+    },
+    {
+      "side": "bottom",
+      "bbox": [
+        1624,
+        1763,
+        54,
+        15
       ]
     }
   ]
