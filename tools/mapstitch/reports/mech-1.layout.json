@@ -1,0 +1,130 @@
+{
+  "source": "/home/user/Campus-connect/map-source/mech-floor-1",
+  "image": "mech-1.png",
+  "size": [
+    2364,
+    1031
+  ],
+  "tiles": [
+    {
+      "file": "Screenshot_20261007_131128.jpg",
+      "scale": 1.0,
+      "x": -10.0,
+      "y": -587.0,
+      "valid_px": 1782421,
+      "compared_px": 0,
+      "mismatch_fraction": null,
+      "edge_coverage": null
+    },
+    {
+      "file": "Screenshot_20261007_131141.jpg",
+      "scale": 1.0,
+      "x": 1506.05,
+      "y": -648.92,
+      "valid_px": 1782421,
+      "compared_px": 0,
+      "mismatch_fraction": null,
+      "edge_coverage": null,
+      "native_zoom_snap": {
+        "zoom_before": 1.000342,
+        "moved_with_it": [],
+        "reverified": {
+          "Screenshot_20261009_213824.jpg->Screenshot_20261007_131141.jpg": {
+            "overlap_px": 576999,
+            "mismatch_fraction": 0.0010190658909287537,
+            "mean_abs_diff": 0.7714554098014035,
+            "edges_a": 7846,
+            "edges_b": 8143,
+            "matched_edges": 7838,
+            "edge_agreement": 0.9837159457745555
+          }
+        }
+      }
+    },
+    {
+      "file": "Screenshot_20261009_213824.jpg",
+      "scale": 1.12504,
+      "x": 782.78,
+      "y": -853.7,
+      "valid_px": 2251631,
+      "compared_px": 1089628,
+      "mismatch_fraction": 0.004349190732984101,
+      "edge_coverage": 0.9991548563255753
+    }
+  ],
+  "seams": [
+    {
+      "from": "Screenshot_20261007_131128.jpg",
+      "to": "Screenshot_20261009_213824.jpg",
+      "status": "proven",
+      "scale": 1.1250371815250098,
+      "dx": 792.7770578323674,
+      "dy": -266.6986355362568,
+      "stats": {
+        "overlap_px": 288645,
+        "mismatch_fraction": 0.0012298844601500113,
+        "mean_abs_diff": 1.0037277624763983,
+        "edges_a": 6247,
+        "edges_b": 5814,
+        "matched_edges": 6118,
+        "edge_agreement": 0.988514177320625
+      },
+      "zoom_fit": {
+        "method": "Gauss-Newton fit of zoom + shift over the overlap's pixels (colour)",
+        "swept_scale": 1.125809175344779,
+        "cells": 59,
+        "scale_sd": 0.000248,
+        "channel_spread": 0.001094,
+        "uncertainty": 0.000547
+      },
+      "sift_inliers": 23,
+      "verified_in": "the zoomed-out tile's frame"
+    },
+    {
+      "from": "Screenshot_20261009_213824.jpg",
+      "to": "Screenshot_20261007_131141.jpg",
+      "status": "proven",
+      "scale": 0.8891637437157136,
+      "dx": 642.8129926542888,
+      "dy": 181.66294192494826,
+      "stats": {
+        "overlap_px": 577022,
+        "mismatch_fraction": 0.0010190252711335095,
+        "mean_abs_diff": 0.7722547840463622,
+        "edges_a": 7846,
+        "edges_b": 7900,
+        "matched_edges": 7839,
+        "edge_agreement": 0.9885487489018913
+      },
+      "zoom_fit": {
+        "method": "Gauss-Newton fit of zoom + shift over the overlap's pixels (colour)",
+        "swept_scale": 0.889,
+        "cells": 72,
+        "scale_sd": 0.000136,
+        "channel_spread": 0.000581,
+        "uncertainty": 0.000291
+      },
+      "sift_inliers": 53,
+      "after_native_zoom_snap": {
+        "scale": 0.8888595118647373,
+        "dx": 642.8877855219736,
+        "dy": 182.0188931905907
+      }
+    }
+  ],
+  "uncovered_fraction": 0.0102,
+  "open_edges": [
+    {
+      "side": "left",
+      "bbox": [
+        20,
+        645,
+        9,
+        173
+      ]
+    }
+  ],
+  "resampled_tiles": {
+    "Screenshot_20261009_213824.jpg": "received at 923x2000, resampled to 1080x2340"
+  }
+}

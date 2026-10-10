@@ -1,0 +1,150 @@
+{
+  "source": "/home/user/Campus-connect/map-source/vjti-floor-1",
+  "image": "vjti-1.png",
+  "size": [
+    2488,
+    1849
+  ],
+  "tiles": [
+    {
+      "file": "Screenshot_20261007_130952.jpg",
+      "scale": 1.0,
+      "x": -44.0,
+      "y": -200.0,
+      "valid_px": 1782421,
+      "compared_px": 261166,
+      "mismatch_fraction": 0.01029613349364006,
+      "edge_coverage": 0.9800743340904398
+    },
+    {
+      "file": "Screenshot_20261007_130955.jpg",
+      "scale": 1.0,
+      "x": 682.0,
+      "y": -211.0,
+      "valid_px": 1782421,
+      "compared_px": 438032,
+      "mismatch_fraction": 0.01322506118274464,
+      "edge_coverage": 0.9955404238994917
+    },
+    {
+      "file": "Screenshot_20261007_131000.jpg",
+      "scale": 1.0,
+      "x": 1422.0,
+      "y": -352.0,
+      "valid_px": 1782421,
+      "compared_px": 220870,
+      "mismatch_fraction": 0.007547426087743922,
+      "edge_coverage": 1.0
+    },
+    {
+      "file": "Screenshot_20261007_131014.jpg",
+      "scale": 1.00364,
+      "x": 1638.17,
+      "y": -275.75,
+      "valid_px": 1789838,
+      "compared_px": 1340023,
+      "mismatch_fraction": 0.0012663961737970169,
+      "edge_coverage": 0.993820168571143
+    }
+  ],
+  "seams": [
+    {
+      "from": "Screenshot_20261007_130952.jpg",
+      "to": "Screenshot_20261007_130955.jpg",
+      "status": "proven",
+      "scale": 1.0,
+      "dx": 726,
+      "dy": -11,
+      "stats": {
+        "overlap_px": 488150,
+        "mismatch_fraction": 0.01274608214688108,
+        "mean_abs_diff": 2.261841647034723,
+        "edges_a": 23592,
+        "edges_b": 21962,
+        "matched_edges": 23368,
+        "edge_agreement": 0.9908358530497355
+      }
+    },
+    {
+      "from": "Screenshot_20261007_130955.jpg",
+      "to": "Screenshot_20261007_131000.jpg",
+      "status": "proven",
+      "scale": 1.0,
+      "dx": 740,
+      "dy": -141,
+      "stats": {
+        "overlap_px": 449800,
+        "mismatch_fraction": 0.008966207203201423,
+        "mean_abs_diff": 1.5135282347710093,
+        "edges_a": 14504,
+        "edges_b": 13663,
+        "matched_edges": 14331,
+        "edge_agreement": 0.9931812303751708
+      }
+    },
+    {
+      "from": "Screenshot_20261007_131000.jpg",
+      "to": "Screenshot_20261007_131014.jpg",
+      "status": "proven",
+      "scale": 1.003635303258347,
+      "dx": 216.17186944564838,
+      "dy": 76.25358289890622,
+      "stats": {
+        "overlap_px": 1342592,
+        "mismatch_fraction": 0.0012617384879397464,
+        "mean_abs_diff": 1.095816152636095,
+        "edges_a": 55111,
+        "edges_b": 60013,
+        "matched_edges": 55101,
+        "edge_agreement": 0.9968137618707773
+      },
+      "zoom_fit": {
+        "method": "Gauss-Newton fit of zoom + shift over the overlap's pixels (colour)",
+        "swept_scale": 1.00375,
+        "cells": 281,
+        "scale_sd": 1.1e-05,
+        "channel_spread": 1.1e-05,
+        "uncertainty": 5e-05
+      }
+    }
+  ],
+  "uncovered_fraction": 0.0406,
+  "open_edges": [
+    {
+      "side": "right",
+      "bbox": [
+        2423,
+        1721,
+        11,
+        11
+      ]
+    },
+    {
+      "side": "right",
+      "bbox": [
+        2407,
+        1731,
+        57,
+        84
+      ]
+    },
+    {
+      "side": "bottom",
+      "bbox": [
+        1488,
+        1763,
+        47,
+        11
+      ]
+    },
+    {
+      "side": "bottom",
+      "bbox": [
+        1624,
+        1763,
+        54,
+        15
+      ]
+    }
+  ]
+}

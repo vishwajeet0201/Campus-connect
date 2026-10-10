@@ -10,11 +10,13 @@ import { GlassBar, GlassButton, GlassCard, GlassInput } from "@/components/glass
 import { CampusMapViewer, type MapFloor, type MapPoi } from "@/components/map/CampusMapViewer";
 import { BottomTabBar } from "@/components/navigation/BottomTabBar";
 import { VoiceAssistant } from "@/components/navigation/VoiceAssistant";
-import type { NavRoute } from "@/lib/navigation";
-import { extractStoryMediaPath, formatPoiLocation, getStoryErrorMessage, isStoryExpired, rankPoiSearch, VJTI_GROUND_FLOOR_HEIGHT, VJTI_GROUND_FLOOR_WIDTH, type StoryItem } from "@/lib/campus";
+import { DirectionsPanel } from "@/components/navigation/DirectionsPanel";
+import { CATEGORY_LABELS, NAV_PLACES, searchPlaces, type NavPlace, type NavRoute } from "@/lib/navigation";
+import { imageFor, planFor, VJTI_GROUND } from "@/lib/maps";
+import { extractStoryMediaPath, formatPoiLocation, getStoryErrorMessage, isStoryExpired, rankPoiSearch, type StoryItem } from "@/lib/campus";
 
 const floors: MapFloor[] = [
-  { id: "g", building_code: "VJTI", building_name: "VJTI main building", code: "G", name: "Ground Floor", sort_order: 0, svg_path: "", width: VJTI_GROUND_FLOOR_WIDTH, height: VJTI_GROUND_FLOOR_HEIGHT },
+  { id: "g", building_code: "VJTI", building_name: "VJTI main building", code: "G", name: "Ground Floor", sort_order: 0, svg_path: VJTI_GROUND.floor.image, width: VJTI_GROUND.floor.width, height: VJTI_GROUND.floor.height },
   { id: "1", building_code: "VJTI", building_name: "VJTI main building", code: "1", name: "First Floor", sort_order: 1, svg_path: "/maps/vjti-1.svg", width: 1600, height: 1000 },
   { id: "2", building_code: "VJTI", building_name: "VJTI main building", code: "2", name: "Second Floor", sort_order: 2, svg_path: "/maps/vjti-2.svg", width: 1600, height: 1000 },
   { id: "3", building_code: "VJTI", building_name: "VJTI main building", code: "3", name: "Third Floor", sort_order: 3, svg_path: "/maps/vjti-3.svg", width: 1600, height: 1000 },
@@ -83,19 +85,64 @@ export function AppShell() {
   const [query, setQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState("all");
   const [selectedPoi, setSelectedPoi] = useState<MapPoi | null>(null);
-  const [focusPoiId, setFocusPoiId] = useState<string | null>(null);
   const [isPanning, setIsPanning] = useState(false);
   const [assistantOpen, setAssistantOpen] = useState(false);
-  const [navRoute, setNavRoute] = useState<{ nodeIds: string[]; step: number } | null>(null);
-  const handleRouteChange = useCallback((route: NavRoute | null, step: number) => setNavRoute(route ? { nodeIds: route.nodeIds, step } : null), []);
-  // Publishes the filter row's bottom edge as --home-chips-bottom so the ground-floor map can sit just below it.
+  const [navRoute, setNavRoute] = useState<{ route: NavRoute; step: number } | null>(null);
+  const handleRouteChange = useCallback((route: NavRoute | null, step: number) => setNavRoute(route ? { route, step } : null), []);
+  const [selectedFeatureId, setSelectedFeatureId] = useState<string | null>(null);
+  const [focusRequest, setFocusRequest] = useState<{ id: string; nonce: number } | null>(null);
+  const [directions, setDirections] = useState<{ fromId: string; toId: string } | null>(null);
+  const [chipsBottom, setChipsBottom] = useState(280);
+  // Publishes the filter row's bottom edge as --home-chips-bottom (and to the map's insets) so the map is framed below it.
   const filterRowRef = useCallback((row: HTMLDivElement | null) => {
     const shell = row?.closest<HTMLElement>(".home-shell");
     if (!row || !shell) return;
-    const update = () => shell.style.setProperty("--home-chips-bottom", `${row.getBoundingClientRect().bottom - shell.getBoundingClientRect().top}px`);
+    const update = () => {
+      const bottom = row.getBoundingClientRect().bottom - shell.getBoundingClientRect().top;
+      shell.style.setProperty("--home-chips-bottom", `${bottom}px`);
+      setChipsBottom(bottom);
+    };
     update();
     const observer = new ResizeObserver(update);
     observer.observe(row);
+    observer.observe(shell);
+    const stories = shell.querySelector(".story-strip-wrap");
+    if (stories) observer.observe(stories);
+    return () => observer.disconnect();
+  }, []);
+  // Height of whichever bottom panel is open (sheet, directions or voice guide), measured by
+  // layout position so the slide-in animation doesn't skew it; the map frames itself above it.
+  const [bottomPanel, setBottomPanel] = useState(0);
+  const shellRef = useCallback((shell: HTMLElement | null) => {
+    if (!shell) return;
+    const selector = ".poi-sheet-container, .voice-assistant-container";
+    const sizes = new ResizeObserver(() => measure());
+    const watched = new Set<Element>();
+    function measure() {
+      let top = Infinity;
+      shell!.querySelectorAll<HTMLElement>(selector).forEach((panel) => {
+        if (!watched.has(panel)) { watched.add(panel); sizes.observe(panel); }
+        if (panel.offsetHeight > 0) top = Math.min(top, panel.offsetTop);
+      });
+      setBottomPanel(Number.isFinite(top) ? Math.max(0, shell!.clientHeight - top) : 0);
+    }
+    const mutations = new MutationObserver(measure);
+    mutations.observe(shell, { childList: true, subtree: true });
+    measure();
+    return () => { mutations.disconnect(); sizes.disconnect(); };
+  }, []);
+  // The floating building/floor column on the right, measured, so the map frames itself clear of it.
+  const [toolsInset, setToolsInset] = useState(72);
+  const toolsRef = useCallback((tools: HTMLDivElement | null) => {
+    const shell = tools?.closest<HTMLElement>(".home-shell");
+    if (!tools || !shell) return;
+    const update = () => {
+      if (tools.hidden) return;
+      setToolsInset(Math.round(shell.getBoundingClientRect().right - tools.getBoundingClientRect().left) + 8);
+    };
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(tools);
     observer.observe(shell);
     return () => observer.disconnect();
   }, []);
@@ -114,10 +161,17 @@ export function AppShell() {
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
 
   const activeBuildingFloors = mapFloors.filter((floor) => floor.building_code === activeBuildingCode).sort((a, b) => a.sort_order - b.sort_order);
+  const placeResults = useMemo(() => searchPlaces(query), [query]);
+  // Seeded POIs only stand in for floors that don't have a real plan or image yet.
   const searchResults = useMemo(() => {
     if (!query.trim()) return [];
-    return rankPoiSearch(query, mapPois).slice(0, 5);
-  }, [mapPois, query]);
+    const placeholderFloors = new Set(mapFloors.filter((floor) => !planFor(floor.building_code, floor.code) && !imageFor(floor.building_code, floor.code)).map((floor) => floor.id));
+    return rankPoiSearch(query, mapPois.filter((poi) => placeholderFloors.has(poi.floor_id))).slice(0, 5);
+  }, [mapFloors, mapPois, query]);
+  const selectedPlace = useMemo<NavPlace | null>(() => NAV_PLACES.find((place) => place.id === selectedFeatureId) ?? null, [selectedFeatureId]);
+  const activeFloor = mapFloors.find((floor) => floor.id === activeFloorId);
+  const guiding = Boolean(directions) || assistantOpen;
+  const mapInsets = useMemo(() => ({ top: chipsBottom + 8, right: guiding ? 12 : toolsInset, bottom: Math.max(bottomPanel, 96) + 12, left: 64 }), [bottomPanel, chipsBottom, guiding, toolsInset]);
 
   const activeStories = useMemo(() => stories.filter((story) => !isStoryExpired(story)), [stories]);
   const currentStory = storyIndex == null ? null : activeStories[storyIndex] ?? null;
@@ -167,9 +221,9 @@ export function AppShell() {
             building_code: building?.code,
             building_name: building?.name,
             ...(isVjtiGroundFloor ? {
-              svg_path: "",
-              width: VJTI_GROUND_FLOOR_WIDTH,
-              height: VJTI_GROUND_FLOOR_HEIGHT,
+              svg_path: VJTI_GROUND.floor.image,
+              width: VJTI_GROUND.floor.width,
+              height: VJTI_GROUND.floor.height,
             } : {}),
           } as MapFloor;
         });
@@ -242,9 +296,32 @@ export function AppShell() {
 
   const closeStory = () => setStoryIndex(null);
 
+  const showGroundFloor = () => {
+    setActiveBuildingCode("VJTI");
+    const groundFloor = mapFloors.find((floor) => floor.building_code === "VJTI" && floor.code === "G");
+    if (groundFloor) setActiveFloorId(groundFloor.id);
+  };
+
+  const selectPlace = (id: string | null, focus = false) => {
+    setSelectedPoi(null);
+    setSelectedFeatureId(id);
+    if (id && focus) setFocusRequest((previous) => ({ id, nonce: (previous?.nonce ?? 0) + 1 }));
+  };
+
+  const handlePlaceSelect = (place: NavPlace) => {
+    setQuery("");
+    showGroundFloor();
+    selectPlace(place.id, true);
+  };
+
+  const openDirections = (toId: string) => {
+    setAssistantOpen(false);
+    showGroundFloor();
+    setDirections({ fromId: toId === "main-gate" ? "mechanical-gate" : "main-gate", toId });
+  };
+
   const handleSearchSelect = (poi: MapPoi) => {
     setQuery("");
-    setFocusPoiId(poi.id);
     setActiveBuildingCode(poi.building_code ?? "VJTI");
     setActiveFloorId(poi.floor_id);
     setSelectedPoi(poi);
@@ -256,6 +333,7 @@ export function AppShell() {
     window.localStorage.setItem("campus-building", code);
     if (nextFloor) setActiveFloorId(nextFloor.id);
     setSelectedPoi(null);
+    setSelectedFeatureId(null);
   };
 
   // The voice guide routes over the VJTI ground-floor graph, so show that floor while it's open.
@@ -266,9 +344,10 @@ export function AppShell() {
       return;
     }
     if (activeBuildingCode !== "VJTI") switchBuilding("VJTI");
-    const groundFloor = mapFloors.find((floor) => floor.building_code === "VJTI" && floor.code === "G");
-    if (groundFloor) setActiveFloorId(groundFloor.id);
+    showGroundFloor();
     setSelectedPoi(null);
+    setSelectedFeatureId(null);
+    setDirections(null);
     setAssistantOpen(true);
   };
 
@@ -434,9 +513,9 @@ export function AppShell() {
   }
 
   return (
-    <main className="app-background home-shell relative min-h-screen text-[var(--color-ink)]">
+    <main ref={shellRef} className="app-background home-shell relative min-h-screen text-[var(--color-ink)]">
       <div className="home-map-layer" aria-label="Campus map preview">
-        <CampusMapViewer floors={mapFloors} pois={mapPois} activeFloorId={activeFloorId} selectedPoiId={selectedPoi?.id ?? null} focusPoiId={focusPoiId} onSelectPoi={(poi) => { setFocusPoiId(null); setSelectedPoi(poi); }} onMapTap={() => setSelectedPoi(null)} onPanningChange={setIsPanning} categoryFilter={categoryFilter} query={query} routeNodeIds={navRoute?.nodeIds} routeStep={navRoute?.step} />
+        <CampusMapViewer floors={mapFloors} pois={mapPois} activeFloorId={activeFloorId} insets={mapInsets} selectedFeatureId={selectedFeatureId} onSelectFeature={(id) => { if (!directions && !assistantOpen) selectPlace(id); }} focusRequest={focusRequest} selectedPoiId={selectedPoi?.id ?? null} onSelectPoi={(poi) => { setSelectedFeatureId(null); setSelectedPoi(poi); }} onPanningChange={setIsPanning} categoryFilter={categoryFilter} route={activeFloor?.building_code === "VJTI" && activeFloor.code === "G" ? navRoute?.route : null} routeStep={navRoute?.step} />
       </div>
 
       <div className="home-top-overlay">
@@ -459,8 +538,17 @@ export function AppShell() {
                 <SlidersHorizontal className="h-4 w-4" />
               </button>
             </GlassBar>
-            {searchResults.length > 0 && (
+            {(placeResults.length > 0 || searchResults.length > 0) && (
               <GlassCard surface="material" className="search-dropdown absolute left-0 right-0 top-[calc(100%+8px)] z-30 overflow-hidden p-1">
+                {placeResults.map((place) => (
+                  <button key={place.id} className="search-result flex w-full items-center justify-between gap-2 rounded-2xl px-3 py-2 text-left text-sm hover:bg-white/8" onClick={() => handlePlaceSelect(place)}>
+                    <div className="min-w-0">
+                      <p className="truncate font-semibold">{place.label}</p>
+                      <p className="text-[11px] text-[var(--color-muted)]">{CATEGORY_LABELS[place.category] ?? place.category} · VJTI main building, Ground Floor</p>
+                    </div>
+                    <ChevronRight className="h-4 w-4 text-[var(--color-muted)]" />
+                  </button>
+                ))}
                 {searchResults.map(({ poi }) => (
                   <button key={poi.id} className="search-result flex w-full items-center justify-between gap-2 rounded-2xl px-3 py-2 text-left text-sm hover:bg-white/8" onClick={() => handleSearchSelect(poi)}>
                     <div className="min-w-0">
@@ -474,7 +562,7 @@ export function AppShell() {
             )}
           </div>
 
-          <div className="story-strip-wrap">
+          <div className="story-strip-wrap" data-collapsed={guiding || undefined}>
             <section aria-label="Stories" className="home-stories flex gap-3 overflow-x-auto px-1 pb-1" data-collapsed={isPanning}>
               <motion.button whileTap={{ scale: 0.94 }} className="flex min-w-[68px] flex-col items-center gap-1" aria-label="Create your story" onClick={() => setComposerOpen(true)}>
                 <span className="story-ring relative grid h-16 w-16 place-items-center rounded-full p-[2px]" data-seen={true}>
@@ -509,7 +597,7 @@ export function AppShell() {
         </div>
       </div>
 
-      <div className="map-tools">
+      <div ref={toolsRef} className="map-tools" hidden={guiding}>
         <GlassBar className="building-pill">
           {buildings.map((building) => (
             <button key={building.code} type="button" data-active={building.code === activeBuildingCode} onClick={() => switchBuilding(building.code)}>
@@ -531,6 +619,30 @@ export function AppShell() {
 
       <AnimatePresence>
         {assistantOpen && <VoiceAssistant key="voice-assistant" onRouteChange={handleRouteChange} onClose={() => setAssistantOpen(false)} />}
+        {directions && !assistantOpen && <DirectionsPanel key="directions" fromId={directions.fromId} toId={directions.toId} onChange={(fromId, toId) => setDirections({ fromId, toId })} onRouteChange={handleRouteChange} onClose={() => setDirections(null)} />}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {selectedPlace && !assistantOpen && !directions && (
+          <motion.div initial={{ y: 120, opacity: 0 }} animate={{ y: 0, opacity: 1 }} exit={{ y: 120, opacity: 0 }} transition={{ type: "spring", stiffness: 280, damping: 26 }} className="poi-sheet-container">
+            <motion.div drag="y" dragConstraints={{ top: 0, bottom: 0 }} onDragEnd={(_, info) => { if (info.offset.y > 80) setSelectedFeatureId(null); }} className="poi-bottom-sheet surface-material p-4">
+              <div className="mx-auto mb-3 h-1.5 w-12 rounded-full bg-[var(--color-separator)]" />
+              <div className="flex items-start justify-between gap-4">
+                <div className="min-w-0">
+                  <p className="text-[10px] font-bold uppercase tracking-[0.16em] text-[var(--color-accent)]">VJTI main building, Ground Floor · {CATEGORY_LABELS[selectedPlace.category] ?? selectedPlace.category}</p>
+                  <h2 className="mt-1 text-xl font-bold">{selectedPlace.label}</h2>
+                </div>
+                <button type="button" className="grid h-8 w-8 shrink-0 place-items-center rounded-full bg-[var(--color-separator)]" aria-label="Close" onClick={() => setSelectedFeatureId(null)}><X className="h-4 w-4" /></button>
+              </div>
+              {(VJTI_GROUND.rooms.find((room) => room.id === selectedPlace.id) ?? VJTI_GROUND.places.find((place) => place.id === selectedPlace.id))?.inferredEntrances && <p className="mt-3 text-sm text-[var(--color-muted)]">The campus map doesn&apos;t mark an entrance here, so directions lead to its nearest side.</p>}
+              <div className="mt-4 flex gap-2">
+                <GlassButton className="flex-1" variant="primary" onClick={() => openDirections(selectedPlace.id)}>
+                  <Navigation className="mr-1 inline h-4 w-4" /> Directions
+                </GlassButton>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
       </AnimatePresence>
 
       <AnimatePresence>

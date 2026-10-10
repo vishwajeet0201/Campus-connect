@@ -1,0 +1,23 @@
+{
+  "source": "/home/user/Campus-connect/map-source/mech-floor-3",
+  "image": "mech-3.png",
+  "size": [
+    832,
+    254
+  ],
+  "tiles": [
+    {
+      "file": "Screenshot_20261007_131208.jpg",
+      "scale": 1.0,
+      "x": -105.0,
+      "y": -1184.0,
+      "valid_px": 1782421,
+      "compared_px": 0,
+      "mismatch_fraction": null,
+      "edge_coverage": null
+    }
+  ],
+  "seams": [],
+  "uncovered_fraction": 0.0,
+  "open_edges": []
+}

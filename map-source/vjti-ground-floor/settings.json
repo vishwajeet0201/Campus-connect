@@ -1,5 +1,0 @@
-{
-  "min_shift_fraction": 0.35,
-  "max_shift_fraction": 0.85,
-  "max_cross_shift_px": 120
-}

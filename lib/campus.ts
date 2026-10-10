@@ -11,9 +11,6 @@ export type Floor = {
   height: number;
 };
 
-export const VJTI_GROUND_FLOOR_WIDTH = 6072;
-export const VJTI_GROUND_FLOOR_HEIGHT = 1510;
-
 export type PoiCategory = {
   id: string;
   code: string;

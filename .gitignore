@@ -51,3 +51,6 @@ map-source/**/crop.json.suggested
 map-source/stitch-summary.json
 !map-source/**/stitched.png
 !map-source/**/labels.json
+
+# python
+__pycache__/

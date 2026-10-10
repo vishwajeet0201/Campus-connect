@@ -1,0 +1,250 @@
+{
+  "source": "/home/user/Campus-connect/map-source/vjti-ground-floor",
+  "image": "vjti-G.png",
+  "size": [
+    6233,
+    1835
+  ],
+  "tiles": [
+    {
+      "file": "1.jpg",
+      "scale": 1.0,
+      "x": -40.0,
+      "y": -382.0,
+      "valid_px": 1782421,
+      "compared_px": 197133,
+      "mismatch_fraction": 0.0006746714147301567,
+      "edge_coverage": 0.6193993106843919
+    },
+    {
+      "file": "2.jpg",
+      "scale": 1.0,
+      "x": 736.0,
+      "y": -337.0,
+      "valid_px": 1782421,
+      "compared_px": 531255,
+      "mismatch_fraction": 0.014160807898278605,
+      "edge_coverage": 0.998868244836367
+    },
+    {
+      "file": "3.jpg",
+      "scale": 1.0,
+      "x": 1344.0,
+      "y": -303.0,
+      "valid_px": 1782421,
+      "compared_px": 788866,
+      "mismatch_fraction": 0.005056625586601526,
+      "edge_coverage": 0.9723371076005153
+    },
+    {
+      "file": "4.jpg",
+      "scale": 1.0,
+      "x": 1881.0,
+      "y": -309.0,
+      "valid_px": 1782421,
+      "compared_px": 663131,
+      "mismatch_fraction": 0.012327880916440341,
+      "edge_coverage": 0.9992993928070995
+    },
+    {
+      "file": "5.jpg",
+      "scale": 1.0,
+      "x": 2570.0,
+      "y": -315.0,
+      "valid_px": 1782421,
+      "compared_px": 386001,
+      "mismatch_fraction": 0.0016165761228597853,
+      "edge_coverage": 0.9800502670436695
+    },
+    {
+      "file": "6.jpg",
+      "scale": 1.0,
+      "x": 3416.0,
+      "y": -295.0,
+      "valid_px": 1782421,
+      "compared_px": 134543,
+      "mismatch_fraction": 0.0,
+      "edge_coverage": 1.0
+    },
+    {
+      "file": "Screenshot_20261009_213957.jpg",
+      "scale": 2.00741,
+      "x": 3479.14,
+      "y": -1422.66,
+      "valid_px": 7193777,
+      "compared_px": 3334017,
+      "mismatch_fraction": 0.0018920119483493935,
+      "edge_coverage": 0.8253031441141754
+    },
+    {
+      "file": "Screenshot_20261009_214000.jpg",
+      "scale": 2.00741,
+      "x": 4597.27,
+      "y": -1541.1,
+      "valid_px": 7197172,
+      "compared_px": 1379027,
+      "mismatch_fraction": 1.8128724093146835e-05,
+      "edge_coverage": 1.0
+    }
+  ],
+  "seams": [
+    {
+      "from": "1.jpg",
+      "to": "2.jpg",
+      "status": "proven",
+      "scale": 1.0,
+      "dx": 776,
+      "dy": 45,
+      "stats": {
+        "overlap_px": 394225,
+        "mismatch_fraction": 0.004149914388991058,
+        "mean_abs_diff": 0.7481488997399962,
+        "edges_a": 9776,
+        "edges_b": 10033,
+        "matched_edges": 8848,
+        "edge_agreement": 0.9492176855005674
+      }
+    },
+    {
+      "from": "2.jpg",
+      "to": "3.jpg",
+      "status": "proven",
+      "scale": 1.0,
+      "dx": 608,
+      "dy": 34,
+      "stats": {
+        "overlap_px": 689854,
+        "mismatch_fraction": 0.011312538595123026,
+        "mean_abs_diff": 1.868846161651596,
+        "edges_a": 19538,
+        "edges_b": 19647,
+        "matched_edges": 19538,
+        "edge_agreement": 0.9972477012025773
+      }
+    },
+    {
+      "from": "3.jpg",
+      "to": "4.jpg",
+      "status": "proven",
+      "scale": 1.0,
+      "dx": 537,
+      "dy": -6,
+      "stats": {
+        "overlap_px": 827955,
+        "mismatch_fraction": 0.0077153951603649955,
+        "mean_abs_diff": 1.3412576770476656,
+        "edges_a": 20790,
+        "edges_b": 21492,
+        "matched_edges": 20411,
+        "edge_agreement": 0.9899898459318941
+      }
+    },
+    {
+      "from": "4.jpg",
+      "to": "5.jpg",
+      "status": "proven",
+      "scale": 1.0,
+      "dx": 689,
+      "dy": -6,
+      "stats": {
+        "overlap_px": 555723,
+        "mismatch_fraction": 0.00878855113068921,
+        "mean_abs_diff": 1.522679464409427,
+        "edges_a": 19176,
+        "edges_b": 19109,
+        "matched_edges": 19176,
+        "edge_agreement": 0.9986908590203137
+      }
+    },
+    {
+      "from": "5.jpg",
+      "to": "6.jpg",
+      "status": "constrained",
+      "scale": 1.0,
+      "dx": 846,
+      "dy": 20,
+      "evidence": "Tile 6 shows only the uniform VJTI Hostels / path / Football Ground bands and their two labels, and no screenshot shows those blocks' west ends (in tile 5) together with anything east of tile 5's view, so pixels cannot fix this seam's horizontal offset. dy is proven by residual (dy=20: every overlapping pixel agrees and all band edges coincide). dx comes from where the Football Ground's label sits on its block. The block's west end is fixed in tile 5 (fill edge at x=612.1); its east end is in Screenshot_20261009_213957, whose seam to tile 6 is proven, at tile-6 x=1174.3 (colour-channel midpoints; 1174.5 in luminance); the label's ink centre is at tile-6 x=470.0. A label centred between the ends gives dx = west + east - 2 * label = 846.4. The Football Ground is a near-perfect rectangle (fill ratio 0.996) and its label is centred vertically to 0.3px; across 192 labelled rectangular blocks on all floors, label offsets have median 0 and 87% are within 3px of centre (a label b px off centre moves dx by 2b). So dx = 846 +-10. The 'VJTI Hostels' label gives 830.7 (west outline 612.6, east end 1173.1-1175.1 depending on colour channel, ink centre 478.0) but is not used: the hostel is a stepped polygon, and labels on non-rectangular shapes are not box-centred in this map (that label sits 5px above its west block's centre; the trapezoidal Cricket Ground's sits 94px left of and 69px below its box centre). Hard bound from pixels: dx >= 687 (neither label is visible in tile 5). One zoomed-out screenshot showing the blocks' west ends and their labels together would prove it.",
+      "refined_axes": [
+        "dy"
+      ],
+      "stats": {
+        "overlap_px": 283062,
+        "mismatch_fraction": 0.0,
+        "mean_abs_diff": 0.14215613540496427,
+        "edges_a": 830,
+        "edges_b": 832,
+        "matched_edges": 669,
+        "edge_agreement": 0.8977884474560486
+      }
+    },
+    {
+      "from": "6.jpg",
+      "to": "Screenshot_20261009_213957.jpg",
+      "status": "proven",
+      "scale": 2.0074051239182285,
+      "dx": 63.14391131373523,
+      "dy": -1127.6637934339565,
+      "stats": {
+        "overlap_px": 400274,
+        "mismatch_fraction": 0.0015914098842293029,
+        "mean_abs_diff": 0.7647936163727846,
+        "edges_a": 3607,
+        "edges_b": 3907,
+        "matched_edges": 3605,
+        "edge_agreement": 0.9397087078408706
+      },
+      "zoom_fit": {
+        "method": "Gauss-Newton fit of zoom + shift over the overlap's pixels (colour)",
+        "swept_scale": 2.0080321285140563,
+        "cells": 71,
+        "scale_sd": 0.000592,
+        "channel_spread": 0.00465,
+        "uncertainty": 0.002325
+      },
+      "sift_inliers": 23,
+      "verified_in": "the zoomed-out tile's frame"
+    },
+    {
+      "from": "Screenshot_20261009_213957.jpg",
+      "to": "Screenshot_20261009_214000.jpg",
+      "status": "proven",
+      "scale": 1.0,
+      "dx": 557,
+      "dy": -59,
+      "stats": {
+        "overlap_px": 775402,
+        "mismatch_fraction": 7.608956386493716e-05,
+        "mean_abs_diff": 0.3378634566328176,
+        "edges_a": 2200,
+        "edges_b": 3157,
+        "matched_edges": 2196,
+        "edge_agreement": 0.9990904954916837
+      }
+    }
+  ],
+  "uncovered_fraction": 0.0176,
+  "open_edges": [
+    {
+      "side": "bottom",
+      "bbox": [
+        732,
+        1676,
+        43,
+        42
+      ]
+    },
+    {
+      "side": "bottom",
+      "bbox": [
+        535,
+        1727,
+        778,
+        54
+      ]
+    }
+  ],
+  "resampled_tiles": {
+    "Screenshot_20261009_213957.jpg": "received at 923x2000, resampled to 1080x2340",
+    "Screenshot_20261009_214000.jpg": "received at 923x2000, resampled to 1080x2340"
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "source": "/home/user/Campus-connect/map-source/vjti-floor-3",
+  "image": "vjti-3.png",
+  "size": [
+    951,
+    455
+  ],
+  "tiles": [
+    {
+      "file": "Screenshot_20261007_131046.jpg",
+      "scale": 1.0,
+      "x": -41.0,
+      "y": -907.0,
+      "valid_px": 1782421,
+      "compared_px": 0,
+      "mismatch_fraction": null,
+      "edge_coverage": null
+    }
+  ],
+  "seams": [],
+  "uncovered_fraction": 0.0,
+  "open_edges": []
+}

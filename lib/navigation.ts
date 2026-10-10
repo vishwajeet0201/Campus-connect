@@ -1,151 +1,70 @@
-import { GROUND_FLOOR_EDGES, GROUND_FLOOR_NODES, GROUND_FLOOR_ROOMS, type GroundFloorNode } from "@/lib/ground-floor";
+import { VJTI_GROUND } from "@/lib/maps";
+import { destinations, planRoute as planOnFloor, spokenName, type Destination, type PlanRoute } from "@/lib/maps/routing";
 
-export type NavPlace = { id: string; name: string; nodeId: string; aliases: string[] };
-export type NavStep = { nodeId: string; text: string };
-export type NavRoute = { from: NavPlace; to: NavPlace; nodeIds: string[]; steps: NavStep[] };
+/** A place on the VJTI ground floor a student can start from or ask for. */
+export type NavPlace = Destination;
+export type NavStep = PlanRoute["steps"][number];
+export type NavRoute = PlanRoute;
 export type PlaceMatch = { place: NavPlace; score: number };
 
-const EXTRA_ALIASES: Record<string, string[]> = {
-  "mechanical-gate": ["mech gate", "main gate", "gate", "entrance"],
-  "towards-mech": ["mech building", "mechanical building"],
-  "directors-bungalow": ["director bungalow", "directors house"],
-  canteen: ["cafeteria", "mess", "food court", "kitchen"],
-  "canteen-staff": ["staff canteen"],
-  auditorium: ["audi", "hall"],
-  "vjti-quad": ["quad", "quadrangle", "courtyard"],
-  "quad-stage": ["stage"],
-  "boys-washroom": ["boys toilet", "gents toilet", "mens washroom", "men's toilet", "boys bathroom"],
-  "girls-washroom": ["girls toilet", "ladies toilet", "womens washroom", "women's toilet", "girls bathroom"],
-  "iot-lab": ["internet of things lab"],
-  "coe-lab": ["centre of excellence", "center of excellence"],
-  "simens-lab": ["siemens lab", "high voltage lab", "siemens"],
-  "vjti-tbi": ["tbi", "incubator", "technology business incubator"],
-  "cs-it-lab-2": ["computer lab 2", "it lab 2", "cs lab 2"],
-  "cs-it-lab-3": ["computer lab 3", "it lab 3", "cs lab 3"],
-  "study-space": ["study area", "reading area"],
-  "vjti-hostels": ["hostel", "hostels"],
-  "football-ground": ["ground", "football field", "playground", "sports ground"],
-  "railway-concession": ["railway pass", "concession counter"],
-  "electrical-dept-computer-lab": ["electrical computer lab"],
-  "biomedical-research": ["biomedical lab"],
-  gymkhana: ["gym"],
-};
-
-/** Every ground-floor room a student can name as a start or destination. */
-export const NAV_PLACES: NavPlace[] = GROUND_FLOOR_ROOMS.map((room) => ({
-  id: room.id,
-  name: room.name,
-  nodeId: `room-${room.id}`,
-  aliases: [room.name, ...(EXTRA_ALIASES[room.id] ?? [])],
+/** Every named room, open place and gate on the ground floor. Aliases always
+ * start with the place's own name; duplicates (two "Boys Washroom"s) also
+ * answer to their "near ..." label. */
+export const NAV_PLACES: NavPlace[] = destinations(VJTI_GROUND).map((place) => ({
+  ...place,
+  aliases: [...new Set([place.name, ...(place.label !== place.name ? [place.label] : []), ...place.aliases])],
 }));
 
-const NODES = new Map(GROUND_FLOOR_NODES.map((node) => [node.id, node]));
-const ROOM_NAMES = new Map(GROUND_FLOOR_ROOMS.map((room) => [`room-${room.id}`, room.name]));
-const HUB_KINDS = new Set<GroundFloorNode["kind"]>(["corridor", "entrance"]);
-
-const distance = (a: GroundFloorNode, b: GroundFloorNode) => Math.hypot(a.x - b.x, a.y - b.y);
-
-/**
- * Walkable adjacency for the ground floor. The drawn edges only cover some rooms,
- * so any room without an edge is linked to its nearest corridor or entrance.
- * Stairs are excluded: every route stays on the ground floor.
- */
-function buildGraph() {
-  const graph = new Map<string, Map<string, number>>();
-  const link = (from: string, to: string) => {
-    const a = NODES.get(from);
-    const b = NODES.get(to);
-    if (!a || !b) return;
-    const weight = distance(a, b);
-    if (!graph.has(from)) graph.set(from, new Map());
-    if (!graph.has(to)) graph.set(to, new Map());
-    graph.get(from)!.set(to, weight);
-    graph.get(to)!.set(from, weight);
-  };
-  for (const edge of GROUND_FLOOR_EDGES) {
-    if (edge.accessible) link(edge.from, edge.to);
-  }
-  const hubs = GROUND_FLOOR_NODES.filter((node) => HUB_KINDS.has(node.kind));
-  for (const node of GROUND_FLOOR_NODES) {
-    if (node.kind !== "room" || graph.has(node.id)) continue;
-    const nearest = hubs.reduce((best, hub) => distance(node, hub) < distance(node, best) ? hub : best);
-    link(node.id, nearest.id);
-  }
-  return graph;
+/** Other places with exactly the same name (e.g. the second Boys Washroom). */
+export function namesakes(place: NavPlace) {
+  return NAV_PLACES.filter((other) => other.name === place.name && other.id !== place.id);
 }
 
-const GRAPH = buildGraph();
-
-/** Shortest path (Dijkstra) between two graph nodes, or null when unreachable. */
-export function shortestPath(fromId: string, toId: string): string[] | null {
-  if (!GRAPH.has(fromId) || !GRAPH.has(toId)) return null;
-  const dist = new Map<string, number>([[fromId, 0]]);
-  const previous = new Map<string, string>();
-  const pending = new Set(GRAPH.keys());
-  while (pending.size) {
-    let current: string | null = null;
-    for (const id of pending) {
-      if (dist.has(id) && (current === null || dist.get(id)! < dist.get(current)!)) current = id;
-    }
-    if (current === null) break;
-    if (current === toId) break;
-    pending.delete(current);
-    for (const [next, weight] of GRAPH.get(current)!) {
-      const candidate = dist.get(current)! + weight;
-      if (candidate < (dist.get(next) ?? Infinity)) {
-        dist.set(next, candidate);
-        previous.set(next, current);
-      }
-    }
-  }
-  if (!dist.has(toId)) return null;
-  const path = [toId];
-  while (path[0] !== fromId) path.unshift(previous.get(path[0])!);
-  return path;
-}
-
-function nodeLabel(id: string) {
-  if (ROOM_NAMES.has(id)) return ROOM_NAMES.get(id)!;
-  if (id === "entrance-mech") return "the Mechanical Gate entrance";
-  const [kind, side] = id.split("-");
-  return `the ${side} ${kind}`;
-}
-
-/** Map heading between two nodes, phrased as screen directions on the map (up = top of the map). */
-function heading(from: GroundFloorNode, to: GroundFloorNode) {
-  const dx = to.x - from.x;
-  const dy = to.y - from.y;
-  const horizontal = Math.abs(dx) > 40 ? (dx > 0 ? "right" : "left") : "";
-  const vertical = Math.abs(dy) > 40 ? (dy > 0 ? "down" : "up") : "";
-  if (horizontal && vertical) return Math.abs(dx) > Math.abs(dy) * 2 ? horizontal : Math.abs(dy) > Math.abs(dx) * 2 ? vertical : `${vertical} and ${horizontal}`;
-  return horizontal || vertical || "ahead";
-}
-
-/** A room next to a corridor, used as a landmark in spoken directions. */
-function landmarkNear(corridorId: string, exclude: Set<string>) {
-  const neighbours = [...(GRAPH.get(corridorId)?.keys() ?? [])].filter((id) => ROOM_NAMES.has(id) && !exclude.has(id));
-  return neighbours.length ? ROOM_NAMES.get(neighbours[0]) : undefined;
-}
-
+/** Walking route between two places; for a destination that exists more than
+ * once (washrooms) the nearest one is chosen. */
 export function planRoute(from: NavPlace, to: NavPlace): NavRoute | null {
-  const nodeIds = shortestPath(from.nodeId, to.nodeId);
-  if (!nodeIds) return null;
-  const endpoints = new Set([from.nodeId, to.nodeId]);
-  const steps: NavStep[] = [{ nodeId: from.nodeId, text: `Starting from ${from.name}.` }];
-  for (let index = 1; index < nodeIds.length; index += 1) {
-    const previous = NODES.get(nodeIds[index - 1])!;
-    const current = NODES.get(nodeIds[index])!;
-    const direction = heading(previous, current);
-    const isLast = index === nodeIds.length - 1;
-    if (isLast) {
-      steps.push({ nodeId: current.id, text: `Go ${direction} into ${to.name}. You have arrived.` });
-    } else {
-      const landmark = landmarkNear(current.id, endpoints);
-      const exitPhrase = index === 1 ? `Leave ${from.name} and head ${direction}` : `Continue ${direction}`;
-      steps.push({ nodeId: current.id, text: `${exitPhrase} to ${nodeLabel(current.id)}${landmark ? `, near ${landmark}` : ""}.` });
-    }
-  }
-  return { from, to, nodeIds, steps };
+  return planOnFloor(VJTI_GROUND, from, to);
+}
+
+export { spokenName };
+
+export const CATEGORY_LABELS: Record<string, string> = {
+  lab: "Lab",
+  room: "Room",
+  office: "Office",
+  faculty: "Faculty cabin",
+  hall: "Hall",
+  food: "Canteen",
+  washroom_men: "Men's washroom",
+  washroom_women: "Women's washroom",
+  building: "Building",
+  open: "Open area",
+  sports: "Sports ground",
+  garden: "Garden",
+  gate: "Gate",
+};
+
+/** Typed search: prefix matches beat word-prefix matches beat substrings. */
+export function searchPlaces(query: string, limit = 6): NavPlace[] {
+  const q = query.toLowerCase().replace(/['’]/g, "").replace(/[^a-z0-9]+/g, " ").trim();
+  if (!q) return [];
+  const compact = q.replace(/ /g, "");
+  const score = (alias: string) => {
+    const a = alias.toLowerCase().replace(/['’]/g, "").replace(/[^a-z0-9]+/g, " ").trim();
+    if (a === q) return 100;
+    if (a.startsWith(q)) return 90;
+    if (a.replace(/ /g, "").startsWith(compact)) return 85; // "al00" -> "AL005"
+    if (a.split(" ").some((word) => word.startsWith(q))) return 75;
+    if (q.split(" ").every((word) => a.split(" ").some((part) => part.startsWith(word)))) return 65;
+    if (a.includes(q)) return 50;
+    return 0;
+  };
+  return NAV_PLACES
+    .map((place) => ({ place, score: Math.max(...place.aliases.map(score)) }))
+    .filter((entry) => entry.score > 0)
+    .sort((a, b) => b.score - a.score || a.place.label.localeCompare(b.place.label))
+    .slice(0, limit)
+    .map((entry) => entry.place);
 }
 
 const NUMBER_WORDS: Record<string, string> = { zero: "0", one: "1", two: "2", three: "3", four: "4", five: "5", six: "6", seven: "7", eight: "8", nine: "9" };
