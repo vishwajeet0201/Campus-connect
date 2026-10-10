@@ -75,13 +75,15 @@ def zoom_offset(scale: float) -> float:
 
 
 def place(b, mb, s: float, tx: float, ty: float, shape):
-    """b and its mask zoomed by s with pixel p at s * p + (tx, ty), in a frame of `shape`."""
-    bs, mbs = (b, mb) if s == 1.0 else rescale(b, mb, s)
-    o = zoom_offset(s)
-    M = np.float32([[1, 0, tx - o], [0, 1, ty - o]])
+    """b and its mask zoomed by s with pixel p at s * p + (tx, ty), in a frame of
+    `shape`, in one resampling (a second one would blur thin outlines twice).
+    Shrinking first low-passes b about as much as area averaging would."""
+    if s < 1:
+        b = cv2.GaussianBlur(b, (0, 0), 0.29 / s)
+    M = np.float32([[s, 0, tx], [0, s, ty]])
     h, w = shape[:2]
-    out = cv2.warpAffine(bs, M, (w, h), flags=cv2.INTER_LINEAR, borderValue=(255, 255, 255))
-    m = cv2.warpAffine(mbs, M, (w, h), flags=cv2.INTER_NEAREST, borderValue=0)
+    out = cv2.warpAffine(b, M, (w, h), flags=cv2.INTER_LINEAR if s <= 1 else cv2.INTER_CUBIC, borderValue=(255, 255, 255))
+    m = cv2.warpAffine(mb, M, (w, h), flags=cv2.INTER_NEAREST, borderValue=0)
     return out, cv2.erode(m, np.ones((3, 3), np.uint8))
 
 
@@ -130,9 +132,9 @@ def refine_zoom(a, ma, b, mb, s: float, dx: int, dy: int) -> dict:
     zoomed by s at (dx, dy)). An integer shift can't follow the drift a 0.1%
     zoom error causes across the overlap, so the sweep alone doesn't pin the
     zoom. Gauss-Newton over every overlap pixel fits the remaining offset as
-    one zoom + shift, re-placing b until it stops moving; the fit is kept only
-    if it verifies at least as well as the sweep. Its zoom uncertainty comes
-    from a bootstrap over 64px cells of the overlap."""
+    one zoom + shift, re-placing b until it stops moving; the fit replaces the
+    sweep unless only the sweep passes the proof test. Its zoom uncertainty
+    comes from a bootstrap over 64px cells of the overlap."""
     o = zoom_offset(s)
     tx, ty = dx + o, dy + o
     swept = {"scale": s, "dx": tx, "dy": ty, "stats": placed_stats(a, ma, b, mb, s, tx, ty)}
@@ -148,10 +150,14 @@ def refine_zoom(a, ma, b, mb, s: float, dx: int, dy: int) -> dict:
         # bw's content sits k * (x - c) + u away from a's: move it back.
         tx, ty = (1 - k) * tx + k * cx - ux, (1 - k) * ty + k * cy - uy
         s *= 1 - k
-        if abs(k) < 1e-6 and abs(ux) < 0.005 and abs(uy) < 0.005:
-            break
+        if abs(k) < 3e-5 and abs(ux) < 0.01 and abs(uy) < 0.01:
+            break  # at the noise floor of re-placing
+    else:
+        return swept
+    # The fit is judged by the proof test alone: colour residuals can't compare
+    # placements at different sub-pixel phases (interpolation blur lowers them).
     st = placed_stats(a, ma, b, mb, s, tx, ty)
-    if (accept(swept["stats"]) and not accept(st)) or st["mean_abs_diff"] > swept["stats"]["mean_abs_diff"] + 0.05:
+    if accept(swept["stats"]) and not accept(st):
         return swept
     rng = np.random.default_rng(0)
     boot = [solve_normals([normals[i] for i in rng.integers(0, len(normals), len(normals))])[0] for _ in range(200)]
