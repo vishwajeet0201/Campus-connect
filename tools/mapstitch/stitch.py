@@ -38,6 +38,7 @@ from mapstitch.core import (  # noqa: E402
 
 CONTENT_MARGIN = 24
 CONTENT_MIN_AREA = 25  # px; smaller specks are noise, not map content
+NATIVE_ZOOM_TOL = 0.0025  # chained zoom this close to 1 is measurement error (see snap_native_zoom)
 
 
 def estimate_scale(a, ma, b, mb) -> tuple[float, int] | None:
@@ -61,11 +62,102 @@ def estimate_scale(a, ma, b, mb) -> tuple[float, int] | None:
 
 
 def rescale(img, mask, scale: float):
-    h, w = img.shape[:2]
-    size = (round(w * scale), round(h * scale))
-    out = cv2.resize(img, size, interpolation=cv2.INTER_CUBIC if scale > 1 else cv2.INTER_AREA)
-    m = cv2.resize(mask, size, interpolation=cv2.INTER_NEAREST)
+    """img zoomed by exactly `scale` (fx/fy, not a rounded output size, so the
+    zoom tested is the zoom reported). Pixel p lands at scale * p + zoom_offset(scale)."""
+    out = cv2.resize(img, None, fx=scale, fy=scale, interpolation=cv2.INTER_CUBIC if scale > 1 else cv2.INTER_AREA)
+    m = cv2.resize(mask, None, fx=scale, fy=scale, interpolation=cv2.INTER_NEAREST)
     return out, cv2.erode(m, np.ones((3, 3), np.uint8))
+
+
+def zoom_offset(scale: float) -> float:
+    """cv2.resize samples pixel centres: p -> scale * p + 0.5 * (scale - 1)."""
+    return 0.5 * (scale - 1)
+
+
+def place(b, mb, s: float, tx: float, ty: float, shape):
+    """b and its mask zoomed by s with pixel p at s * p + (tx, ty), in a frame of `shape`."""
+    bs, mbs = (b, mb) if s == 1.0 else rescale(b, mb, s)
+    o = zoom_offset(s)
+    M = np.float32([[1, 0, tx - o], [0, 1, ty - o]])
+    h, w = shape[:2]
+    out = cv2.warpAffine(bs, M, (w, h), flags=cv2.INTER_LINEAR, borderValue=(255, 255, 255))
+    m = cv2.warpAffine(mbs, M, (w, h), flags=cv2.INTER_NEAREST, borderValue=0)
+    return out, cv2.erode(m, np.ones((3, 3), np.uint8))
+
+
+def placed_stats(a, ma, b, mb, s: float, tx: float, ty: float) -> dict:
+    """overlap_stats for b zoomed by s with its pixel p at s * p + (tx, ty) in a."""
+    bw, mbw = place(b, mb, s, tx, ty, a.shape)
+    return overlap_stats(a, ma, bw, mbw, 0, 0)
+
+
+def block_shifts(a, ma, bw, mbw, size: int = 96, step: int = 48):
+    """Sub-pixel shift of bw against a in every block that has detail in both
+    directions (a corner, a glyph), so each one pins x and y."""
+    ga = cv2.GaussianBlur(cv2.cvtColor(a, cv2.COLOR_BGR2GRAY).astype(np.float32), (0, 0), 1.0)
+    gb = cv2.GaussianBlur(cv2.cvtColor(bw, cv2.COLOR_BGR2GRAY).astype(np.float32), (0, 0), 1.0)
+    gx, gy = cv2.Sobel(ga, cv2.CV_32F, 1, 0), cv2.Sobel(ga, cv2.CV_32F, 0, 1)
+    valid = (ma > 0) & (mbw > 0)
+    win = cv2.createHanningWindow((size, size), cv2.CV_32F)
+    out = []
+    h, w = ga.shape
+    for y in range(0, h - size + 1, step):
+        for x in range(0, w - size + 1, step):
+            if not valid[y:y + size, x:x + size].all():
+                continue
+            jx, jy = gx[y:y + size, x:x + size], gy[y:y + size, x:x + size]
+            sxx, syy, sxy = float((jx * jx).sum()), float((jy * jy).sum()), float((jx * jy).sum())
+            weakest = (sxx + syy) / 2 - np.sqrt(((sxx - syy) / 2) ** 2 + sxy ** 2)
+            if weakest < 2e6:
+                continue
+            (dx, dy), resp = cv2.phaseCorrelate(ga[y:y + size, x:x + size], gb[y:y + size, x:x + size], win)
+            if resp > 0.3 and abs(dx) < 3 and abs(dy) < 3:
+                out.append((x + size / 2, y + size / 2, dx, dy))
+    return np.array(out, np.float64).reshape(-1, 4)
+
+
+def refine_zoom(a, ma, b, mb, s: float, dx: int, dy: int) -> dict:
+    """Sub-pixel zoom and shift for b, from the integer-shift sweep's best (b
+    zoomed by s at (dx, dy)). An integer shift can't follow the drift a 0.1%
+    zoom error causes across the overlap, so the sweep alone doesn't pin the
+    zoom. Instead, measure how far every detailed block of the overlap is still
+    off, fit one zoom + shift to those block offsets, and repeat; the fit is
+    kept only if it verifies at least as well as the sweep."""
+    o = zoom_offset(s)
+    tx, ty = dx + o, dy + o
+    swept = {"scale": s, "dx": tx, "dy": ty, "stats": placed_stats(a, ma, b, mb, s, tx, ty)}
+    for _ in range(4):
+        bw, mbw = place(b, mb, s, tx, ty, a.shape)
+        d = block_shifts(a, ma, bw, mbw)
+        if len(d) < 8 or np.ptp(d[:, 0]) + np.ptp(d[:, 1]) < 300:
+            return swept  # too little detail spread over the overlap to pin a zoom
+        cx, cy = d[:, 0].mean(), d[:, 1].mean()
+        # Block offset = k * (position - centre) + (ux, uy), both axes stacked.
+        A = np.zeros((2 * len(d), 3))
+        A[0::2, 0], A[0::2, 1] = d[:, 0] - cx, 1
+        A[1::2, 0], A[1::2, 2] = d[:, 1] - cy, 1
+        rhs = d[:, 2:4].reshape(-1)
+        keep = np.ones(len(rhs), bool)
+        for _ in range(3):  # drop outlying blocks (repeated patterns, text edges)
+            sol, *_ = np.linalg.lstsq(A[keep], rhs[keep], rcond=None)
+            res = rhs - A @ sol
+            keep = np.abs(res) <= max(0.25, 3 * np.median(np.abs(res[keep])))
+        k, ux, uy = sol
+        # bw's content sits (offset) away from a's: move it back.
+        tx, ty = (1 - k) * tx + k * cx - ux, (1 - k) * ty + k * cy - uy
+        s *= 1 - k
+        dof = max(1, keep.sum() - 3)
+        sigma = np.sqrt((res[keep] ** 2).sum() / dof)
+        cov = sigma ** 2 * np.linalg.inv(A[keep].T @ A[keep])
+        if abs(k) < 2e-5 and abs(ux) < 0.05 and abs(uy) < 0.05:
+            break
+    st = placed_stats(a, ma, b, mb, s, tx, ty)
+    if not accept(st) or st["mean_abs_diff"] > swept["stats"]["mean_abs_diff"] + 0.05:
+        return swept
+    return {"scale": float(s), "dx": float(tx), "dy": float(ty), "stats": st, "zoom_fit": {
+        "method": "least-squares fit of zoom + shift to sub-pixel offsets of detailed blocks",
+        "swept_scale": swept["scale"], "blocks": int(keep.sum() // 2), "residual_px": round(float(sigma), 3),
+        "scale_sd": float(np.sqrt(cov[0, 0]) * s)}}
 
 
 def sweep_scale(a, ma, b, mb, dx: int, dy: int, centre: float, span: float, step: float):
@@ -100,12 +192,14 @@ def register(a, ma, b, mb) -> dict:
         # it only when it clearly beats 1.0.
         s, sx, sy, sst = sweep_scale(a, ma, b, mb, dx, dy, 1.0, 0.012, 0.001)
         s, sx, sy, sst = sweep_scale(a, ma, b, mb, sx, sy, s, 0.001, 0.00025) if s != 1.0 else (s, sx, sy, sst)
+        zoom = {}
         if s != 1.0 and accept(sst) and (not accept(st) or sst["mismatch_fraction"] < 0.5 * st["mismatch_fraction"]):
-            dx, dy, st, scale = sx, sy, sst, s
+            zoom = refine_zoom(a, ma, b, mb, s, sx, sy)
+            dx, dy, st, scale = zoom.pop("dx"), zoom.pop("dy"), zoom.pop("stats"), zoom.pop("scale")
         else:
             scale = 1.0
         if accept(st):
-            result = {"status": "proven", "scale": scale, "dx": dx, "dy": dy, "stats": st}
+            result = {"status": "proven", "scale": scale, "dx": dx, "dy": dy, "stats": st, **zoom}
             # A rival offset is a real alternative only if it fits about as well
             # pixel for pixel; along uniform bands, shifted offsets match the
             # band edges but not the labels drawn on them.
@@ -147,13 +241,55 @@ def _register_zoomed(a, ma, b, mb, est) -> dict | None:
     s, sx, sy, sst = sweep_scale(a, ma, b, mb, best[0], best[1], round(est[0], 3), 0.008, 0.001)
     s, sx, sy, sst = sweep_scale(a, ma, b, mb, sx, sy, s, 0.001, 0.00025)
     if accept(sst):
-        return {"status": "proven", "scale": s, "dx": sx, "dy": sy, "stats": sst, "sift_inliers": est[1]}
+        return {"status": "proven", **refine_zoom(a, ma, b, mb, s, sx, sy), "sift_inliers": est[1]}
     return {"status": "unresolved", "reason": f"zoomed tile (scale ~{est[0]:.3f}) did not verify", "best": {"scale": s, "dx": sx, "dy": sy, "stats": sst}}
+
+
+def seam_check(images, masks, transforms, j: int, i: int) -> dict:
+    """Overlap stats of tiles j and i under the given canvas transforms, in the
+    coarser of their two frames."""
+    (sj, xj, yj), (si, xi, yi) = transforms[j], transforms[i]
+    s, tx, ty = si / sj, (xi - xj) / sj, (yi - yj) / sj
+    if s <= 1:
+        return placed_stats(images[j], masks[j], images[i], masks[i], s, tx, ty)
+    return placed_stats(images[i], masks[i], images[j], masks[j], 1 / s, -tx / s, -ty / s)
+
+
+def snap_native_zoom(images, masks, transforms, tiles, seams, resampled) -> dict:
+    """A native screenshot whose chained zoom comes out within NATIVE_ZOOM_TOL of
+    1 (e.g. one reached through a zoomed bridging tile, whose zoom the overlap
+    only pins to ~0.1%) is placed at zoom 1, pixel for pixel, anchored on its
+    seam overlap, if every seam it is part of still proves. Modifies
+    transforms in place; returns {tile index: {zoom before, re-verified seams}}."""
+    index = {t.name: k for k, t in enumerate(tiles)}
+    snapped = {}
+    for i, (s, tx, ty) in enumerate(transforms):
+        if s == 1.0 or abs(s - 1) > NATIVE_ZOOM_TOL or tiles[i].name in resampled:
+            continue
+        links = [(index[q["from"]], index[q["to"]]) for q in seams if q["status"] == "proven" and tiles[i].name in (q["from"], q["to"])]
+        if not links:
+            continue
+        # Keep the middle of the overlap with the tile it was placed against fixed.
+        j = next(a if b == i else b for a, b in links)
+        sj, xj, yj = transforms[j]
+        hi, wi = images[i].shape[:2]
+        hj, wj = images[j].shape[:2]
+        cx = (max(tx, xj) + min(tx + wi * s, xj + wj * sj)) / 2
+        cy = (max(ty, yj) + min(ty + hi * s, yj + hj * sj)) / 2
+        trial = list(transforms)
+        trial[i] = (1.0, cx - (cx - tx) / s, cy - (cy - ty) / s)
+        checks = {f"{tiles[a].name}->{tiles[b].name}": seam_check(images, masks, trial, a, b) for a, b in links}
+        if all(accept(st) for st in checks.values()):
+            transforms[i] = trial[i]
+            snapped[i] = {"zoom_before": round(s, 6), "reverified": checks}
+    return snapped
 
 
 def composite(images, masks, transforms, low_priority=()):
     """Place every tile; each canvas pixel comes from the tile it sits deepest inside.
-    Upsampled (zoomed-out or downscaled) tiles only fill what no sharper tile shows."""
+    Priority goes by where a tile came from: native screenshots at their own zoom
+    first, then zoomed-out (upsampled) ones, and screenshots that arrived
+    downscaled (low_priority) only fill what nothing else shows."""
     corners = []
     for img, (s, tx, ty) in zip(images, transforms):
         h, w = img.shape[:2]
@@ -172,7 +308,9 @@ def composite(images, masks, transforms, low_priority=()):
         if s != 1.0:
             wm = cv2.erode(wm, np.ones((3, 3), np.uint8))
         depth = cv2.distanceTransform(wm, cv2.DIST_L2, 5)
-        if s > 1.0 or i in low_priority:
+        if i in low_priority:
+            depth = np.where(wm > 0, depth * 1e-6 + 1e-9, 0)
+        elif s > 1.0:
             depth = np.where(wm > 0, depth * 1e-3 + 1e-6, 0)
         take = depth > best
         canvas[take] = warped[take]
@@ -299,6 +437,7 @@ def main() -> int:
                 print(json.dumps({"seam": key, **rel}, default=str)[:600])
             raise SystemExit(f"cannot place {[tiles[i].name for i in pending]}: no proven seam to any placed tile; pin one in {args.folder / 'stitch.json'} with evidence")
     transforms = [transforms[i] for i in range(len(images))]
+    snapped = snap_native_zoom(images, masks, transforms, tiles, seams, resampled)
 
     low = {i for i, t in enumerate(tiles) if t.name in resampled}
     canvas, owner, origin = composite(images, masks, transforms, low)
@@ -320,8 +459,9 @@ def main() -> int:
         "image": f"{args.name}.png",
         "size": [int(out.shape[1]), int(out.shape[0])],
         "tiles": [
-            {"file": t.name, "scale": round(s, 5), "x": round(tx - ox - x0, 2), "y": round(ty - oy - y0, 2), **c}
-            for t, (s, tx, ty), c in zip(tiles, transforms, checks)
+            {"file": t.name, "scale": round(s, 5), "x": round(tx - ox - x0, 2), "y": round(ty - oy - y0, 2), **c,
+             **({"native_zoom_snap": snapped[i]} if i in snapped else {})}
+            for i, (t, (s, tx, ty), c) in enumerate(zip(tiles, transforms, checks))
         ],
         "seams": seams,
         "uncovered_fraction": round(uncovered, 4),

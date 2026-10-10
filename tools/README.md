@@ -20,21 +20,28 @@ their soft drop shadow is *divided back out* using the measured transmission map
 
 Each tile is registered to its predecessor by an exhaustive search over every
 translation, then a zoom sweep (screenshots are sometimes pinch-zoomed; e.g.
-`mech-floor-2` tile 2 is at 0.745x). A tile that doesn't overlap its
-predecessor (a later screenshot that bridges two earlier ones) is registered to
-whichever placed tile it does overlap. A zoomed-out tile is verified in its own,
-coarser frame, so sharp outlines are never judged against upsampled blur. A seam
-is **proven** only when, over the whole overlap, ≥90% of edges coincide and <3%
-of pixels differ (the residue is anti-aliasing of 1px outlines at sub-pixel
+`mech-floor-2` tile 2 is at 0.745x). A tile that doesn't overlap its predecessor
+(a later screenshot that bridges two earlier ones) is registered to whichever
+placed tile it does overlap. A zoomed-out tile is verified in its own, coarser
+frame, so sharp outlines are never judged against upsampled blur. A zoom found
+by the sweep is then refined below the pixel: the remaining offset of every
+overlap block with detail in both directions is measured and one zoom + shift is
+fitted to them (kept only if it verifies at least as well; the report gives the
+fit's blocks, residual and zoom uncertainty). A native screenshot whose chained
+zoom comes out within 0.25% of 1 (one reached through a zoomed bridging tile) is
+placed at zoom 1, pixel for pixel, if all its seams still prove. A seam is
+**proven** only when, over the whole overlap, ≥90% of edges coincide and <3% of
+pixels differ (the residue is anti-aliasing of 1px outlines at sub-pixel
 offsets); if a clearly different offset fits about as well, the seam is
 ambiguous. Anything weaker or ambiguous stops the run. Each tile is then
 compared against the final composite.
 
 Screenshots that arrive downscaled (e.g. 923x2000 after a chat upload) are
-resampled to the phone's 1080x2340 and only fill what no full-resolution tile
-shows; the report lists them under `resampled_tiles`. The image is cropped to
-the drawn content (specks under 25px of compression noise don't count) plus a
-24px margin.
+resampled to the phone's 1080x2340; the report lists them under
+`resampled_tiles`. Where tiles overlap, native screenshots win, then zoomed-out
+ones, and resampled uploads only fill what nothing else shows. The image is
+cropped to the drawn content (specks under 25px of compression noise don't
+count) plus a 24px margin.
 
 Seams that pixels cannot prove go in the floor's `stitch.json`:
 
