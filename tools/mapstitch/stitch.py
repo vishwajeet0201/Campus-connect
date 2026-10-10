@@ -38,6 +38,7 @@ from mapstitch.core import (  # noqa: E402
 
 CONTENT_MARGIN = 24
 CONTENT_MIN_AREA = 25  # px; smaller specks are noise, not map content
+MIN_ZOOM = 0.0005  # a zoom smaller than this moves no pixel by more than ~0.5px across a screen
 NATIVE_ZOOM_TOL = 0.0025  # chained zoom this close to 1 is measurement error (see snap_native_zoom)
 
 
@@ -199,7 +200,12 @@ def register(a, ma, b, mb) -> dict:
         s, sx, sy, sst = sweep_scale(a, ma, b, mb, dx, dy, 1.0, 0.012, 0.001)
         s, sx, sy, sst = sweep_scale(a, ma, b, mb, sx, sy, s, 0.001, 0.00025) if s != 1.0 else (s, sx, sy, sst)
         zoom = refine_zoom(a, ma, b, mb, s, sx, sy) if s != 1.0 else {"stats": {}}
-        if accept(zoom["stats"]) and (not accept(st) or zoom["stats"]["mismatch_fraction"] < 0.5 * st["mismatch_fraction"]):
+        # Keep a zoom only if it is really there: clearly away from 1 given its
+        # fit's uncertainty (residuals can't judge it: interpolating a
+        # fractional placement smooths away anti-aliasing differences).
+        sd = (zoom.get("zoom_fit") or {}).get("scale_sd") or 0
+        real = "zoom_fit" in zoom and abs(zoom["scale"] - 1) > max(MIN_ZOOM, 3 * sd)
+        if accept(zoom["stats"]) and (real or not accept(st)):
             dx, dy, st, scale = zoom.pop("dx"), zoom.pop("dy"), zoom.pop("stats"), zoom.pop("scale")
         else:
             zoom, scale = {}, 1.0
