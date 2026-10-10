@@ -60,8 +60,8 @@
   "places": [
     { "at": [2037, 859], "id": "vjti-quad", "name": "VJTI Quad", "label": { "x": 2037, "y": 859, "size": 20, "lines": ["VJTI Quad ♥"] }, "category": "open", "aliases": ["quad", "quadrangle", "courtyard"] },
     { "at": [2630, 1331], "id": "study-space", "name": "Study Space", "label": { "x": 2630, "y": 1331, "size": 15.5, "lines": ["Study", "Space"] }, "category": "open", "aliases": ["study area", "reading area"] },
-    { "at": [3880, 1150], "id": "football-ground", "name": "Football Ground", "label": { "x": 3877, "y": 1230, "size": 23, "lines": ["Football Ground"] }, "category": "sports", "area": "field", "aliases": ["football field", "football", "playground", "sports ground"] },
-    { "at": [5310, 1153], "id": "cricket-ground", "name": "Cricket Ground", "label": { "x": 5256, "y": 1230, "size": 23, "lines": ["Cricket Ground"] }, "category": "sports", "area": "field", "aliases": ["cricket field", "cricket", "sports ground"] },
+    { "at": [3880, 1150], "id": "football-ground", "name": "Football Ground", "label": { "x": 3879, "y": 1230, "size": 23, "lines": ["Football Ground"] }, "category": "sports", "area": "field", "aliases": ["football field", "football", "playground", "sports ground"] },
+    { "at": [5310, 1153], "id": "cricket-ground", "name": "Cricket Ground", "label": { "x": 5257, "y": 1230, "size": 23, "lines": ["Cricket Ground"] }, "category": "sports", "area": "field", "aliases": ["cricket field", "cricket", "sports ground"] },
     { "at": [1250, 1700], "id": "textile-garden", "name": "Textile Garden", "label": { "x": 924, "y": 1749, "size": 29, "lines": ["Textile Garden"] }, "category": "garden", "area": "garden", "aliases": ["garden"], "unseenEdges": ["bottom"] }
   ],
   "gates": [

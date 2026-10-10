@@ -54,7 +54,10 @@ Pixels no screenshot shows are left transparent, never guessed. Where drawn
 content runs into such pixels the floor goes on beyond what was captured; the
 report lists those places under `open_edges`. Each tile's `mismatch_fraction`
 and `edge_coverage` compare it with the final image where *other* tiles were
-drawn (null when it was drawn everywhere it shows).
+drawn (null when it was drawn everywhere it shows). Native tiles are placed at
+whole pixels, so along soft colour boundaries (tan/white) neighbours can differ
+by a fraction of a pixel in anti-aliasing; `edge_coverage` is low there without
+any misalignment, which each seam's own overlap test settles.
 
 | Floor | Tiles | Seams | Notes |
 | --- | --- | --- | --- |
