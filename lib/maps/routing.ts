@@ -255,14 +255,38 @@ function landmark(plan: FloorPlan, p: Point, exclude: Set<string>, radius = 140)
 /** Plan the walk between two destinations. If `to` names an amenity that
  * exists more than once (e.g. "Boys Washroom"), the nearest one is chosen. */
 export function planRoute(plan: FloorPlan, from: Destination, to: Destination): PlanRoute | null {
-  const candidates = destinations(plan).filter((d) => d.name === to.name && d.kind === to.kind);
+  // A namesake of the start (the other "Boys Washroom") is a real destination,
+  // so the start itself is never the nearest match.
+  const candidates = destinations(plan).filter((d) => d.name === to.name && d.kind === to.kind && (d.id === to.id || d.node !== from.node));
   let best: { to: Destination; path: { nodes: number[]; cost: number } } | null = null;
   for (const target of candidates.length ? candidates : [to]) {
     const path = shortestPath(plan, from.node, target.node);
     if (path && (!best || path.cost < best.path.cost)) best = { to: target, path };
   }
   if (!best) return null;
-  return describe(plan, from, best.to, best.path.nodes, best.path.cost);
+  // A field, a garden or a block with no drawn door has no known inside: the
+  // walk starts or ends at the entrance it uses, not at a guessed centre.
+  const { endOnly } = graphOf(plan);
+  let nodes = best.path.nodes;
+  let startSide: string | undefined;
+  let endSide: string | undefined;
+  if (nodes.length > 2 && endOnly[nodes[0]]) {
+    startSide = entranceSide(plan, from.id, nodes[1]);
+    nodes = nodes.slice(1);
+  }
+  if (nodes.length > 2 && endOnly[nodes[nodes.length - 1]]) {
+    endSide = entranceSide(plan, best.to.id, nodes[nodes.length - 2]);
+    nodes = nodes.slice(0, -1);
+  }
+  return describe(plan, from, best.to, nodes, best.path.cost, startSide, endSide);
+}
+
+/** Which side of a door-less feature an inferred entrance node is on. */
+function entranceSide(plan: FloorPlan, id: string, node: number) {
+  const [x, y] = plan.nav.nodes[node];
+  const feature = plan.rooms.find((r) => r.id === id) ?? plan.places.find((p) => p.id === id);
+  const entrance = feature?.inferredEntrances?.find((e) => Math.hypot(e.x - x, e.y - y) < 2);
+  return entrance && { top: "top", bottom: "bottom", left: "left", right: "right" }[entrance.side];
 }
 
 const MIN_LEG = 30; // px; shorter wiggles are folded into the neighbouring leg
@@ -326,7 +350,7 @@ function segmentsOf(kinds: string[]): Segment[] {
   return out;
 }
 
-function describe(plan: FloorPlan, from: Destination, to: Destination, nodes: number[], cost: number): PlanRoute {
+function describe(plan: FloorPlan, from: Destination, to: Destination, nodes: number[], cost: number, startSide?: string, endSide?: string): PlanRoute {
   const graph = graphOf(plan);
   const points = nodes.map((n) => pointOf(plan, n));
   const share = (i: number) => graph.edge.get(graph.key(nodes[i], nodes[i + 1])) ?? [0, 0];
@@ -334,6 +358,10 @@ function describe(plan: FloorPlan, from: Destination, to: Destination, nodes: nu
   const open = points.slice(0, -1).map((_, i) => share(i)[1] > 0.5);
   const kinds = nodes.map((n) => plan.nav.nodes[n][2]);
   const last = points.length - 1;
+  // A walk that starts or ends at a door-less feature's entrance walks from or
+  // to that point; there is no room behind it to go into.
+  if (startSide) kinds[0] = "approach";
+  if (endSide) kinds[last] = "approach";
   const exclude = new Set([from.id, to.id]);
   const roomAt = (i: number) => plan.rooms.find((r) => r.id === nodeRef(plan, nodes[i]));
   const roomName = (i: number) => {
@@ -347,6 +375,7 @@ function describe(plan: FloorPlan, from: Destination, to: Destination, nodes: nu
   let lastMark: string | undefined;
   const segments = segmentsOf(kinds);
   const steps: RouteStep[] = [];
+  const startText = startSide ? `Start at the ${startSide} side of ${from.label}.` : `Start at ${from.label}.`;
   let facing: number | null = null;
   // Where the walker stands when the next step begins.
   let cursor = 0;
@@ -365,7 +394,7 @@ function describe(plan: FloorPlan, from: Destination, to: Destination, nodes: nu
   for (let s = 0; s < segments.length; s += 1) {
     const seg = segments[s];
     if (seg.type === "walk") {
-      if (steps.length === 0) steps.push({ text: `Start at ${from.label}.`, start: 0, end: 0 });
+      if (steps.length === 0) steps.push({ text: startText, start: 0, end: 0 });
       const runStart = Math.max(seg.start, cursor);
       const nextDoor = segments[s + 1]?.type === "door";
       for (const leg of seg.end > runStart ? legsOf(points, outdoor, open, runStart, seg.end) : []) {
@@ -396,7 +425,7 @@ function describe(plan: FloorPlan, from: Destination, to: Destination, nodes: nu
       // Passing through an intermediate room: in by one door, out by the next.
       const exit = nextDoor?.type === "door" ? nextDoor.at : seg.at;
       const after = Math.min(exit + 1, last);
-      steps.push({ text: `Go through ${roomName(seg.at)} and out of its other door.`, start: seg.at, end: after });
+      steps.push({ text: `Go through ${roomName(seg.at)} and out of its other door.`, start: kinds[seg.at - 1] === "door" ? seg.at - 1 : seg.at, end: after });
       facing = exit + 1 <= last ? headingDeg(points[exit], points[after]) : facing;
       cursor = after;
       s += nextDoor?.type === "door" ? 1 : 0;
@@ -406,7 +435,7 @@ function describe(plan: FloorPlan, from: Destination, to: Destination, nodes: nu
     const room = segments[s + 1];
     if (room?.type !== "room") continue;
     const side = sideOf(seg.at);
-    if (steps.length === 0) steps.push({ text: `Start at ${from.label}.`, start: 0, end: 0 });
+    if (steps.length === 0) steps.push({ text: startText, start: 0, end: 0 });
     if (room.at === last) {
       const target = spokenName(to);
       appendTo(`; ${target.charAt(0).toUpperCase()}${target.slice(1)} is ${side}. You have arrived.`, last);
@@ -419,7 +448,8 @@ function describe(plan: FloorPlan, from: Destination, to: Destination, nodes: nu
   }
   const final = steps[steps.length - 1];
   if (!final.text.includes("You have arrived")) {
-    final.text = steps.length === 1 ? `You are already at ${spokenName(to)}.` : `${final.text} You have arrived at ${spokenName(to)}.`;
+    const there = endSide ? `the ${endSide} side of ${spokenName(to)}` : spokenName(to);
+    final.text = steps.length === 1 && nodes.length === 1 ? `You are already at ${spokenName(to)}.` : `${final.text} You have arrived at ${there}.`;
   }
   final.end = last;
   return { from, to, nodes, points, outdoor, steps, cost };
