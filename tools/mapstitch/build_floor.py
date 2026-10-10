@@ -175,9 +175,14 @@ def gate_label(rgb: np.ndarray, box: list[int]) -> dict:
     x, y, w, h = box
     vertical = h > w
     ink = rgb[y + 3:y + h - 3, x + 3:x + w - 3].min(axis=2) > 160
-    across = np.flatnonzero(ink.any(axis=0 if vertical else 1))
-    size = (across[-1] - across[0] + 1) / 0.95 if across.size else min(w, h) * 0.56
-    return {"x": x + w / 2, "y": y + h / 2, "size": round(float(size), 1), **({"rotate": 90} if vertical else {})}
+    if not ink.any():
+        return {"x": x + w / 2, "y": y + h / 2, "size": round(min(w, h) * 0.56, 1), **({"rotate": 90} if vertical else {})}
+    rows, cols = np.flatnonzero(ink.any(axis=1)), np.flatnonzero(ink.any(axis=0))
+    across = cols if vertical else rows
+    size = (across[-1] - across[0] + 1) / 0.95
+    # Centred on the ink: the source doesn't always centre the text in its marker.
+    cx, cy = x + 3 + (cols[0] + cols[-1] + 1) / 2, y + 3 + (rows[0] + rows[-1] + 1) / 2
+    return {"x": round(float(cx), 1), "y": round(float(cy), 1), "size": round(float(size), 1), **({"rotate": 90} if vertical else {})}
 
 
 def main() -> int:
@@ -297,20 +302,45 @@ def main() -> int:
         x0, x1, y0, y1 = xs.min(), xs.max(), ys.min(), ys.max()
         ax, ay = nodes[anchor_node]["x"], nodes[anchor_node]["y"]
         found = []
+
         # Sample each side on the shape's own boundary (its extreme pixel in
-        # each row or column), so stepped and slanted outlines work too.
-        cols = [int(round(x)) for x in np.linspace(x0, x1, 21)]
-        rows = [int(round(y)) for y in np.linspace(y0, y1, 21)]
-        col_ys = {x: np.flatnonzero(mask[:, x]) for x in cols}
-        row_xs = {y: np.flatnonzero(mask[y]) for y in rows}
-        sides = {
-            "top": ([(x, col_ys[x][0]) for x in cols if col_ys[x].size], (0, -1)),
-            "bottom": ([(x, col_ys[x][-1]) for x in cols if col_ys[x].size], (0, 1)),
-            "left": ([(row_xs[y][0], y) for y in rows if row_xs[y].size], (-1, 0)),
-            "right": ([(row_xs[y][-1], y) for y in rows if row_xs[y].size], (1, 0)),
-        }
-        for side, (points, (nx, ny)) in sides.items():
-            # Prefer the middle of the side, then work outwards.
+        # each row or column), so stepped and slanted outlines work too. A
+        # stepped side is split into its straight runs, and every long run gets
+        # its own entrance (a stepped block's lower face still faces its path).
+        def extreme(side: str, k: int):
+            line = mask[:, k] if side in ("top", "bottom") else mask[k]
+            idx = np.flatnonzero(line)
+            return None if not idx.size else int(idx[0] if side in ("top", "left") else idx[-1])
+
+        def runs(side: str, lo: int, hi: int):
+            ks = list(range(lo, hi + 1, 2))
+            if ks[-1] != hi:
+                ks.append(hi)
+            out, start, last, prev = [], None, None, None
+            for k in ks:
+                e = extreme(side, k)
+                if start is not None and (e is None or abs(e - prev) > 3):
+                    out.append((start, last))
+                    start = None
+                if e is not None and start is None:
+                    start = k
+                if e is not None:
+                    last = k
+                prev = e
+            if start is not None:
+                out.append((start, last))
+            long = [r for r in out if r[1] - r[0] >= 200]
+            return long or ([max(out, key=lambda r: r[1] - r[0])] if out else [])
+
+        sides = []
+        for side, (nx, ny) in (("top", (0, -1)), ("bottom", (0, 1)), ("left", (-1, 0)), ("right", (1, 0))):
+            horizontal = side in ("top", "bottom")
+            for a, b in runs(side, x0 if horizontal else y0, x1 if horizontal else y1):
+                ks = [int(round(k)) for k in np.linspace(a, b, 21)]
+                pts = [((k, extreme(side, k)) if horizontal else (extreme(side, k), k)) for k in ks]
+                sides.append((side, [p for p in pts if None not in p], (nx, ny)))
+        for side, points, (nx, ny) in sides:
+            # Prefer the middle of the run, then work outwards.
             order = sorted(range(len(points)), key=lambda i: abs(i - len(points) // 2))
             for i in order:
                 px, py = points[i]
@@ -353,7 +383,9 @@ def main() -> int:
                 raise SystemExit(f"place {p['id']} anchor is not on its {p['area']}")
             ys, xs = np.nonzero(comp)
             place["bbox"] = [int(xs.min()), int(ys.min()), int(xs.max() - xs.min() + 1), int(ys.max() - ys.min() + 1)]
-            place["rings"] = polygon(fill_holes(np.pad(comp, 1))[1:-1, 1:-1])
+            # A looser fit than rooms': field edges are long and straight, and a
+            # tight one traces the anti-aliasing of a slanted side as wobble.
+            place["rings"] = polygon(fill_holes(np.pad(comp, 1))[1:-1, 1:-1], eps=2.5)
             node = add_node(x, y, "place", p["id"])
             place["inferredEntrances"] = inferred_entrance(comp, node, p["id"])
         else:
