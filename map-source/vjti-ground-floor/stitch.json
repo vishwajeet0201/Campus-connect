@@ -1,10 +1,12 @@
 {
   "pinned": {
     "5.jpg->6.jpg": {
-      "dx": 837,
+      "dx": 839,
       "dy": 20,
-      "refine": ["dy"],
-      "evidence": "Tile 6 shows only the uniform VJTI Hostels / path / Football Ground bands and their labels, and no screenshot shows those blocks' west edge (tile 5 x=614) together with anything east of it, so pixels cannot fix this seam's horizontal offset. dy is proven by residual (dy=20: every overlapping pixel agrees, all band edges coincide). dx is estimated from label placement: Screenshot_20261009_213957 (proven seam to tile 6, scale 2.009) shows both blocks' east edges, at tile-6 x=1170.2 (Hostels) and 1172.3 (Football Ground). If each label were centred on its block, the offset would be 827.7 (from 'VJTI Hostels') or 846.8 (from 'Football Ground'); dx=837 is their mean. The two disagree by 19px, and labels on wide features in this app sit left of centre (Cricket Ground: ~54px at this zoom; Textile Hall, Towards Mech Building: 10-17px), which would make the true offset larger, so treat dx as 837 +-30px. Hard bounds from pixels: dx >= 687 (neither label is visible in tile 5). A screenshot showing the hostel block's west edge and its label together would prove it."
+      "refine": [
+        "dy"
+      ],
+      "evidence": "Tile 6 shows only the uniform VJTI Hostels / path / Football Ground bands and their two labels, and no screenshot shows those blocks' west ends (tile 5, x=612.5) together with anything east of tile 5's view, so pixels cannot fix this seam's horizontal offset. dy is proven by residual (dy=20: every overlapping pixel agrees and all band edges coincide). dx comes from where the labels sit. The west ends are fixed in tile 5 (outline/edge centres at x=612.2-612.7); the east ends are in Screenshot_20261009_213957, whose seam to tile 6 is proven, at tile-6 x=1174.9-1175.0; the label ink centres are at tile-6 x=478.0 (VJTI Hostels) and 470.0 (Football Ground). A label centred between the ends gives dx = west + east - 2 * label: 831.7 from 'VJTI Hostels' (assuming that label is centred on the west block of the stepped hostel outline, which has no dividing line at the step) and 847.1 from 'Football Ground' (both ends unambiguous). dx=839 is their mean. A label sitting b px left of its block's centre would mean a smaller dx (dx = 847 - 2b or 832 - 2b), but across 192 labelled rectangular blocks on all floors label offsets have median 0 and 87% are within 3px of centre, so no bias is assumed. The two values disagree by 15px, so at least one label is about 7px off centre; treat dx as 839 +-30px. Hard bound from pixels: dx >= 687 (neither label is visible in tile 5). One zoomed-out screenshot showing the hostel block's west end and its label together would prove it."
     }
   }
 }

@@ -25,16 +25,17 @@ translation, then a zoom sweep (screenshots are sometimes pinch-zoomed; e.g.
 placed tile it does overlap. A zoomed-out tile is verified in its own, coarser
 frame, so sharp outlines are never judged against upsampled blur. A zoom found
 by the sweep is then refined below the pixel: a Gauss-Newton fit over every
-overlap pixel solves for the zoom + shift that best aligns the two (kept only if
-it verifies at least as well; the report gives the zoom's uncertainty from a
-bootstrap over the overlap). A native screenshot whose chained zoom comes out
-within 0.25% of 1 (one reached through a zoomed bridging tile) is placed at zoom
-1, pixel for pixel, if all its seams still prove. A seam is **proven** only
-when, over the whole overlap, ≥90% of edges coincide and <3% of pixels differ
-(the residue is anti-aliasing of 1px outlines at sub-pixel offsets); if a
-clearly different offset fits about as well, the seam is ambiguous. Anything
-weaker or ambiguous stops the run. Each tile is then compared against the final
-composite.
+overlap pixel and colour channel solves for the zoom + shift that best aligns
+the two; the report gives its uncertainty as the larger of a bootstrap over the
+overlap and the spread between fits on each colour channel alone. A zoom under
+0.05%, or within 3 uncertainties of 1, is treated as none. A native screenshot
+whose chained zoom comes out within 0.25% of 1 through a zoomed or resampled
+bridging tile is placed at zoom 1, pixel for pixel, if all its seams still prove
+(the seam then records both placements). A seam is **proven** only when, over
+the whole overlap, ≥90% of edges coincide and <3% of pixels differ (the residue
+is anti-aliasing of 1px outlines at sub-pixel offsets); if a clearly different
+offset fits about as well, the seam is ambiguous. Anything weaker or ambiguous
+stops the run. Each tile is then compared against the final composite.
 
 Screenshots that arrive downscaled (e.g. 923x2000 after a chat upload) are
 resampled to the phone's 1080x2340; the report lists them under
@@ -49,7 +50,11 @@ Seams that pixels cannot prove go in the floor's `stitch.json`:
   Axes the pixels *can* fix are listed under `refine` and solved by residual.
 * `exclude` — a tile left out, with the reason; the floor is reported as partial.
 
-Pixels no screenshot shows are left transparent, never guessed.
+Pixels no screenshot shows are left transparent, never guessed. Where drawn
+content runs into such pixels the floor goes on beyond what was captured; the
+report lists those places under `open_edges`. Each tile's `mismatch_fraction`
+and `edge_coverage` compare it with the final image where *other* tiles were
+drawn (null when it was drawn everywhere it shows).
 
 | Floor | Tiles | Seams | Notes |
 | --- | --- | --- | --- |

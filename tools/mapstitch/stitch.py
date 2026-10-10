@@ -96,30 +96,37 @@ def placed_stats(a, ma, b, mb, s: float, tx: float, ty: float) -> dict:
 
 def zoom_normals(a, ma, bw, mbw, cell: int = 64):
     """Gauss-Newton normal equations for the residual offset of placed bw
-    against a, modelled as k * (position - centre) + (ux, uy), accumulated per
-    cell of the overlap (so their spread can be bootstrapped). Straight edges
-    constrain only across themselves, corners and glyphs both ways."""
-    ga = cv2.GaussianBlur(cv2.cvtColor(a, cv2.COLOR_BGR2GRAY).astype(np.float32), (0, 0), 1.5)
-    gb = cv2.GaussianBlur(cv2.cvtColor(bw, cv2.COLOR_BGR2GRAY).astype(np.float32), (0, 0), 1.5)
-    gx, gy = cv2.Sobel(gb, cv2.CV_32F, 1, 0, ksize=1, scale=0.5), cv2.Sobel(gb, cv2.CV_32F, 0, 1, ksize=1, scale=0.5)
-    e = ga - gb
+    against a, modelled as k * (position - centre) + (ux, uy). Each colour
+    channel contributes on its own: this map's fills (blue rooms, tan paths,
+    green fields) are almost the same grey, so only colour sees the boundaries
+    between them. Straight edges constrain only across themselves, corners and
+    glyphs both ways. Returns the equations summed per 64px cell (to bootstrap)
+    and per channel (to compare), and the centre."""
     valid = cv2.erode(((ma > 0) & (mbw > 0)).astype(np.uint8), np.ones((7, 7), np.uint8)).astype(bool)
-    valid &= np.abs(e) < 60  # not a feature one tile lacks (e.g. a shadow remnant)
+    fa = cv2.GaussianBlur(a.astype(np.float32), (0, 0), 1.5)
+    fb = cv2.GaussianBlur(bw.astype(np.float32), (0, 0), 1.5)
+    valid &= np.abs(fa - fb).max(axis=2) < 60  # not a feature one tile lacks (e.g. a shadow remnant)
     ys, xs = np.nonzero(valid)
     if len(xs) < 1000:
         return None
     cx, cy = float(xs.mean()), float(ys.mean())
-    gxs, gys, es = gx[ys, xs].astype(np.float64), gy[ys, xs].astype(np.float64), e[ys, xs].astype(np.float64)
-    J = np.stack([gxs * (xs - cx) + gys * (ys - cy), gxs, gys], axis=1)
     cells = (ys // cell) * (a.shape[1] // cell + 1) + xs // cell
     order = np.argsort(cells)
-    bounds = np.flatnonzero(np.diff(cells[order])) + 1
-    normals = []
-    for idx in np.split(order, bounds):
-        Jc = J[idx]
-        if np.abs(Jc).sum() > 0:
-            normals.append((Jc.T @ Jc, Jc.T @ es[idx]))
-    return normals, (cx, cy)
+    groups = np.split(order, np.flatnonzero(np.diff(cells[order])) + 1)
+    per_cell = [[np.zeros((3, 3)), np.zeros(3)] for _ in groups]
+    per_channel = []
+    for c in range(3):
+        gb = fb[..., c]
+        gx = cv2.Sobel(gb, cv2.CV_32F, 1, 0, ksize=1, scale=0.5)[ys, xs].astype(np.float64)
+        gy = cv2.Sobel(gb, cv2.CV_32F, 0, 1, ksize=1, scale=0.5)[ys, xs].astype(np.float64)
+        e = (fa[..., c] - gb)[ys, xs].astype(np.float64)
+        J = np.stack([gx * (xs - cx) + gy * (ys - cy), gx, gy], axis=1)
+        per_channel.append((J.T @ J, J.T @ e))
+        for acc, idx in zip(per_cell, groups):
+            acc[0] += J[idx].T @ J[idx]
+            acc[1] += J[idx].T @ e[idx]
+    normals = [(n, r) for n, r in per_cell if np.trace(n) > 0]
+    return normals, (cx, cy), per_channel
 
 
 def solve_normals(normals):
@@ -144,7 +151,7 @@ def refine_zoom(a, ma, b, mb, s: float, dx: int, dy: int) -> dict:
         got = zoom_normals(a, ma, bw, mbw)
         if got is None or len(got[0]) < 8:
             return swept
-        normals, (cx, cy) = got
+        normals, (cx, cy), per_channel = got
         k, ux, uy = solve_normals(normals)
         if abs(k) > 0.01 or abs(ux) > 5 or abs(uy) > 5:
             return swept  # diverging: the start wasn't close enough
@@ -160,11 +167,24 @@ def refine_zoom(a, ma, b, mb, s: float, dx: int, dy: int) -> dict:
     st = placed_stats(a, ma, b, mb, s, tx, ty)
     if accept(swept["stats"]) and not accept(st):
         return swept
+    # Two views of the zoom's uncertainty: a bootstrap over overlap cells
+    # (neighbouring cells share features, so it runs small) and how far each
+    # colour channel alone would move it (sensitive to which features carry
+    # the fit). The larger is the honest one.
     rng = np.random.default_rng(0)
     boot = [solve_normals([normals[i] for i in rng.integers(0, len(normals), len(normals))])[0] for _ in range(200)]
+    by_channel = []
+    for n, r in per_channel:
+        try:
+            by_channel.append(solve_normals([(n, r)])[0])
+        except np.linalg.LinAlgError:
+            continue
+    sd = float(np.std(boot) * s)
+    spread = float((max(by_channel) - min(by_channel)) * s) if len(by_channel) > 1 else 0.0
     return {"scale": float(s), "dx": float(tx), "dy": float(ty), "stats": st, "zoom_fit": {
-        "method": "Gauss-Newton fit of zoom + shift over the overlap's pixels",
-        "swept_scale": swept["scale"], "cells": len(normals), "scale_sd": round(float(np.std(boot) * s), 6)}}
+        "method": "Gauss-Newton fit of zoom + shift over the overlap's pixels (colour)",
+        "swept_scale": swept["scale"], "cells": len(normals), "scale_sd": round(sd, 6),
+        "channel_spread": round(spread, 6), "uncertainty": round(max(sd, spread / 2), 6)}}
 
 
 def sweep_scale(a, ma, b, mb, dx: int, dy: int, centre: float, span: float, step: float):
@@ -203,7 +223,7 @@ def register(a, ma, b, mb) -> dict:
         # Keep a zoom only if it is really there: clearly away from 1 given its
         # fit's uncertainty (residuals can't judge it: interpolating a
         # fractional placement smooths away anti-aliasing differences).
-        sd = (zoom.get("zoom_fit") or {}).get("scale_sd") or 0
+        sd = (zoom.get("zoom_fit") or {}).get("uncertainty") or 0
         real = "zoom_fit" in zoom and abs(zoom["scale"] - 1) > max(MIN_ZOOM, 3 * sd)
         if accept(zoom["stats"]) and (real or not accept(st)):
             dx, dy, st, scale = zoom.pop("dx"), zoom.pop("dy"), zoom.pop("stats"), zoom.pop("scale")
@@ -215,8 +235,17 @@ def register(a, ma, b, mb) -> dict:
             # pixel for pixel; along uniform bands, shifted offsets match the
             # band edges but not the labels drawn on them.
             bad = lambda stats: stats["mismatch_fraction"] * stats["overlap_px"]  # noqa: E731
-            rivals = [r for r in plausible[1:] if accept(r[2]) and (abs(r[0] - dx) > 8 or abs(r[1] - dy) > 8)
-                      and r[2]["matched_edges"] > 0.5 * st["matched_edges"] and bad(r[2]) <= 1.5 * bad(st) + 50]
+            others = [r for r in plausible[1:] if abs(r[0] - dx) > 8 or abs(r[1] - dy) > 8]
+            if scale != 1.0:
+                # Judge rivals the way the winner was judged: at its zoom, sub-pixel.
+                rescored = []
+                for rx, ry, _ in others:
+                    _, sx2, sy2, _ = sweep_scale(a, ma, b, mb, rx, ry, scale, 0.0, 1.0)
+                    z = refine_zoom(a, ma, b, mb, scale, sx2, sy2)
+                    rescored.append((z["dx"], z["dy"], z["stats"]))
+                others = [r for r in rescored if abs(r[0] - dx) > 8 or abs(r[1] - dy) > 8]
+            rivals = [r for r in others if accept(r[2]) and r[2]["matched_edges"] > 0.5 * st["matched_edges"]
+                      and bad(r[2]) <= 1.5 * bad(st) + 50]
             if rivals:
                 result["status"] = "ambiguous"
                 result["rival"] = {"dx": rivals[0][0], "dy": rivals[0][1], "stats": rivals[0][2]}
@@ -231,7 +260,14 @@ def register(a, ma, b, mb) -> dict:
         if inv is None or inv["status"] != "proven":
             return inv or unresolved
         s = inv["scale"]
-        return {**inv, "scale": 1 / s, "dx": -inv["dx"] / s, "dy": -inv["dy"] / s, "verified_in": "the zoomed-out tile's frame"}
+        out = {**inv, "scale": 1 / s, "dx": -inv["dx"] / s, "dy": -inv["dy"] / s, "verified_in": "the zoomed-out tile's frame"}
+        if inv.get("zoom_fit"):
+            z = dict(inv["zoom_fit"])
+            z["swept_scale"] = 1 / z["swept_scale"]
+            for key in ("scale_sd", "channel_spread", "uncertainty"):
+                z[key] = round(z[key] / s ** 2, 6)  # d(1/s) = ds / s^2
+            out["zoom_fit"] = z
+        return out
     if est and abs(est[0] - 1) > 0.005:
         return _register_zoomed(a, ma, b, mb, est) or unresolved
     return unresolved
@@ -281,10 +317,13 @@ def snap_native_zoom(images, masks, transforms, tiles, seams, resampled) -> dict
         if s == 1.0 or abs(s - 1) > NATIVE_ZOOM_TOL or tiles[i].name in resampled:
             continue
         links = [(index[q["from"]], index[q["to"]]) for q in seams if q["status"] == "proven" and tiles[i].name in (q["from"], q["to"])]
-        if not links:
+        parent = next((index[q["from"]] for q in seams if q["to"] == tiles[i].name), None)
+        # Only a zoom inherited through a non-native tile (a resampled or zoomed
+        # bridge) is suspect; a zoom measured against a native neighbour is real.
+        if not links or parent is None or (tiles[parent].name not in resampled and transforms[parent][0] == 1.0):
             continue
         # Keep the middle of the overlap with the tile it was placed against fixed.
-        j = next(a if b == i else b for a, b in links)
+        j = parent
         sj, xj, yj = transforms[j]
         hi, wi = images[i].shape[:2]
         hj, wj = images[j].shape[:2]
@@ -297,6 +336,20 @@ def snap_native_zoom(images, masks, transforms, tiles, seams, resampled) -> dict
             transforms[i] = trial[i]
             snapped[i] = {"zoom_before": round(s, 6), "reverified": checks}
     return snapped
+
+
+def warp_tile(img, mask, s: float, tx: float, ty: float, W: int, H: int):
+    """A tile and its mask on the canvas, resampled the way place() verified it."""
+    M = np.float32([[s, 0, tx], [0, s, ty]])
+    if s == 1.0:
+        flags = cv2.INTER_NEAREST
+    elif s < 1:
+        img, flags = cv2.GaussianBlur(img, (0, 0), 0.29 / s), cv2.INTER_LINEAR
+    else:
+        flags = cv2.INTER_CUBIC
+    warped = cv2.warpAffine(img, M, (W, H), flags=flags, borderValue=(255, 255, 255))
+    wm = cv2.warpAffine(mask, M, (W, H), flags=cv2.INTER_NEAREST, borderValue=0)
+    return warped, (wm if s == 1.0 else cv2.erode(wm, np.ones((3, 3), np.uint8)))
 
 
 def composite(images, masks, transforms, low_priority=()):
@@ -312,20 +365,13 @@ def composite(images, masks, transforms, low_priority=()):
     ox, oy = int(np.floor(min(xs))), int(np.floor(min(ys)))
     W, H = int(np.ceil(max(xs))) - ox + 1, int(np.ceil(max(ys))) - oy + 1
     canvas = np.full((H, W, 3), 255, np.uint8)
-    best = np.zeros((H, W), np.float32)
+    best = np.zeros((H, W), np.float64)
     owner = np.full((H, W), -1, np.int16)
     for i, (img, mask, (s, tx, ty)) in enumerate(zip(images, masks, transforms)):
-        M = np.float32([[s, 0, tx - ox], [0, s, ty - oy]])
-        flags = cv2.INTER_NEAREST if s == 1.0 else cv2.INTER_CUBIC
-        warped = cv2.warpAffine(img, M, (W, H), flags=flags, borderValue=(255, 255, 255))
-        wm = cv2.warpAffine(mask, M, (W, H), flags=cv2.INTER_NEAREST, borderValue=0)
-        if s != 1.0:
-            wm = cv2.erode(wm, np.ones((3, 3), np.uint8))
-        depth = cv2.distanceTransform(wm, cv2.DIST_L2, 5)
-        if i in low_priority:
-            depth = np.where(wm > 0, depth * 1e-6 + 1e-9, 0)
-        elif s > 1.0:
-            depth = np.where(wm > 0, depth * 1e-3 + 1e-6, 0)
+        warped, wm = warp_tile(img, mask, s, tx - ox, ty - oy, W, H)
+        # Class first, then depth: depth (< 1e5 px) never outranks a better class.
+        rank = 0 if i in low_priority else (1 if s > 1.0 else 2)
+        depth = np.where(wm > 0, cv2.distanceTransform(wm, cv2.DIST_L2, 5) + 1 + rank * 1e5, 0)
         take = depth > best
         canvas[take] = warped[take]
         best[take] = depth[take]
@@ -333,27 +379,46 @@ def composite(images, masks, transforms, low_priority=()):
     return canvas, owner, (ox, oy)
 
 
-def consistency(images, masks, transforms, canvas, origin) -> list[dict]:
-    """Compare every tile against the final composite over all its valid pixels."""
+def consistency(images, masks, transforms, canvas, owner, origin) -> list[dict]:
+    """Compare every tile with the final composite where other tiles were
+    drawn (where it was drawn itself, it can only agree)."""
     ox, oy = origin
     H, W = canvas.shape[:2]
+    ec = cv2.dilate(edge_map(canvas), np.ones((3, 3), np.uint8)).astype(bool)
     out = []
-    for img, mask, (s, tx, ty) in zip(images, masks, transforms):
-        M = np.float32([[s, 0, tx - ox], [0, s, ty - oy]])
-        flags = cv2.INTER_NEAREST if s == 1.0 else cv2.INTER_CUBIC
-        warped = cv2.warpAffine(img, M, (W, H), flags=flags, borderValue=(255, 255, 255))
-        wm = cv2.warpAffine(mask, M, (W, H), flags=cv2.INTER_NEAREST, borderValue=0).astype(bool)
-        if s != 1.0:
-            wm = cv2.erode(wm.astype(np.uint8), np.ones((5, 5), np.uint8)).astype(bool)
-        diff = cv2.absdiff(warped, canvas).max(axis=2)[wm]
-        ec = cv2.dilate(edge_map(canvas), np.ones((3, 3), np.uint8)).astype(bool)
-        et = edge_map(warped).astype(bool) & wm
+    for i, (img, mask, (s, tx, ty)) in enumerate(zip(images, masks, transforms)):
+        warped, wm = warp_tile(img, mask, s, tx - ox, ty - oy, W, H)
+        wm = cv2.erode(wm, np.ones((5, 5), np.uint8)).astype(bool)
+        shared = wm & (owner >= 0) & (owner != i)
+        if not shared.any():
+            out.append({"valid_px": int(wm.sum()), "compared_px": 0, "mismatch_fraction": None, "edge_coverage": None})
+            continue
+        diff = cv2.absdiff(warped, canvas).max(axis=2)[shared]
+        et = edge_map(warped).astype(bool) & shared
         out.append({
             "valid_px": int(wm.sum()),
+            "compared_px": int(shared.sum()),
             "mismatch_fraction": float((diff > 60).mean()),
             "edge_coverage": float((et & ec).sum() / max(1, et.sum())),
         })
     return out
+
+
+def find_open_edges(image, covered) -> list[dict]:
+    """Drawn content that runs into an area no screenshot shows: the map goes
+    on there, so the floor is incomplete at that edge."""
+    content = (image.min(axis=2) < 235) & covered
+    unseen = cv2.dilate((~covered).astype(np.uint8), np.ones((3, 3), np.uint8)).astype(bool)
+    touch = (content & unseen).astype(np.uint8)
+    n, _, stats, _ = cv2.connectedComponentsWithStats(cv2.dilate(touch, np.ones((9, 9), np.uint8)), connectivity=8)
+    H, W = covered.shape
+    edges = []
+    for x, y, w, h, area in stats[1:]:
+        if area < 60:
+            continue
+        side = min((("left", x), ("right", W - x - w), ("top", y), ("bottom", H - y - h)), key=lambda t: t[1])[0]
+        edges.append({"side": side, "bbox": [int(x), int(y), int(w), int(h)]})
+    return edges
 
 
 def content_bbox(canvas, owner, min_area=CONTENT_MIN_AREA):
@@ -364,6 +429,10 @@ def content_bbox(canvas, owner, min_area=CONTENT_MIN_AREA):
     content = ((canvas.min(axis=2) < 245) & covered).astype(np.uint8)
     n, _, stats, _ = cv2.connectedComponentsWithStats(content, connectivity=8)
     keep = stats[1:][stats[1:, cv2.CC_STAT_AREA] >= min_area]
+    if not len(keep):
+        keep = stats[1:]  # nothing but specks: keep them rather than crop to nothing
+    if not len(keep):
+        raise SystemExit("the stitched canvas has no drawn content")
     x0, y0 = keep[:, cv2.CC_STAT_LEFT].min(), keep[:, cv2.CC_STAT_TOP].min()
     x1 = (keep[:, cv2.CC_STAT_LEFT] + keep[:, cv2.CC_STAT_WIDTH]).max()
     y1 = (keep[:, cv2.CC_STAT_TOP] + keep[:, cv2.CC_STAT_HEIGHT]).max()
@@ -452,10 +521,17 @@ def main() -> int:
             raise SystemExit(f"cannot place {[tiles[i].name for i in pending]}: no proven seam to any placed tile; pin one in {args.folder / 'stitch.json'} with evidence")
     transforms = [transforms[i] for i in range(len(images))]
     snapped = snap_native_zoom(images, masks, transforms, tiles, seams, resampled)
+    index = {t.name: k for k, t in enumerate(tiles)}
+    for q in seams:
+        # A snapped tile's seam no longer chains to where it was drawn: record both.
+        j, i = index[q["from"]], index[q["to"]]
+        if i in snapped or j in snapped:
+            (sj, xj, yj), (si, xi, yi) = transforms[j], transforms[i]
+            q["after_native_zoom_snap"] = {"scale": si / sj, "dx": (xi - xj) / sj, "dy": (yi - yj) / sj}
 
     low = {i for i, t in enumerate(tiles) if t.name in resampled}
     canvas, owner, origin = composite(images, masks, transforms, low)
-    checks = consistency(images, masks, transforms, canvas, origin)
+    checks = consistency(images, masks, transforms, canvas, owner, origin)
     x0, y0, x1, y1 = content_bbox(canvas, owner)
     m = CONTENT_MARGIN
     x0, y0 = max(0, x0 - m), max(0, y0 - m)
@@ -464,6 +540,7 @@ def main() -> int:
     covered = owner[y0:y1, x0:x1] >= 0
     out = np.dstack([canvas[y0:y1, x0:x1], np.where(covered, 255, 0).astype(np.uint8)])
     uncovered = float((~covered).mean())
+    open_edges = find_open_edges(out[..., :3], covered)
 
     args.out.mkdir(parents=True, exist_ok=True)
     cv2.imwrite(str(args.out / f"{args.name}.png"), out, [cv2.IMWRITE_PNG_COMPRESSION, 9])
@@ -479,6 +556,7 @@ def main() -> int:
         ],
         "seams": seams,
         "uncovered_fraction": round(uncovered, 4),
+        "open_edges": open_edges,
         **({"excluded_tiles": excluded} if excluded else {}),
         **({"resampled_tiles": {name: f"received at {w}x{h}, resampled to {SCREEN_SHAPE[1]}x{SCREEN_SHAPE[0]}" for name, (w, h) in resampled.items()}} if resampled else {}),
     }
@@ -492,7 +570,7 @@ def main() -> int:
         own = owner[y0:y1, x0:x1]
         tint = np.where(own[..., None] >= 0, colours[own], 0)
         cv2.imwrite(str(args.debug / f"{args.name}-owners.png"), cv2.addWeighted(out[..., :3], 0.6, tint.astype(np.uint8), 0.4, 0))
-    summary = {"floor": args.name, "size": layout["size"], "seams": [(s["from"], s["to"], s["status"]) for s in seams], "excluded": sorted(excluded), "worst_tile_mismatch": max(c["mismatch_fraction"] for c in checks), "min_edge_coverage": min(c["edge_coverage"] for c in checks)}
+    summary = {"floor": args.name, "size": layout["size"], "seams": [(s["from"], s["to"], s["status"]) for s in seams], "excluded": sorted(excluded), "worst_tile_mismatch": max((c["mismatch_fraction"] for c in checks if c["mismatch_fraction"] is not None), default=0.0), "min_edge_coverage": min((c["edge_coverage"] for c in checks if c["edge_coverage"] is not None), default=1.0), "open_edges": len(open_edges)}
     print(json.dumps(summary))
     return 0
 

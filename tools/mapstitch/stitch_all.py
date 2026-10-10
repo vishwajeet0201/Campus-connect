@@ -44,7 +44,8 @@ def main() -> int:
         summary = json.loads(proc.stdout.strip().splitlines()[-1])
         seams = ", ".join(f"{a}->{b}:{s}" for a, b, s in summary["seams"]) or "single tile"
         excluded = f"\tEXCLUDED {', '.join(summary['excluded'])}" if summary["excluded"] else ""
-        print(f"{name}\t{summary['size'][0]}x{summary['size'][1]}\t{seams}\tworst tile mismatch {summary['worst_tile_mismatch']:.4f}{excluded}", flush=True)
+        opened = f"\tOPEN EDGES {summary['open_edges']}" if summary.get("open_edges") else ""
+        print(f"{name}\t{summary['size'][0]}x{summary['size'][1]}\t{seams}\tworst tile mismatch {summary['worst_tile_mismatch']:.4f}{excluded}{opened}", flush=True)
     return 1 if failed else 0
 
 
