@@ -2,7 +2,7 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it } from "vitest";
 import { VJTI_GROUND, imageFor } from "@/lib/maps";
 import { destinations, planRoute } from "@/lib/maps/routing";
-import type { PlanRoom, Point } from "@/lib/maps/types";
+import type { PlanPlace, PlanRoom, Point } from "@/lib/maps/types";
 
 const plan = VJTI_GROUND;
 const places = destinations(plan);
@@ -23,13 +23,35 @@ function insideRoom(room: PlanRoom, p: Point, inset: number) {
   return inside;
 }
 
-/** Every room a walking segment passes through (sampled every 2px, 3px inside the outline). */
+function insideRing(ring: [number, number][], p: Point) {
+  let inside = false;
+  for (let i = 0, j = ring.length - 1; i < ring.length; j = i++) {
+    const [xi, yi] = ring[i];
+    const [xj, yj] = ring[j];
+    if (yi > p.y !== yj > p.y && p.x < ((xj - xi) * (p.y - yi)) / (yj - yi) + xi) inside = !inside;
+  }
+  return inside;
+}
+
+/** Inside a field or garden, at least `inset` px from its outline. */
+function insideArea(place: PlanPlace, p: Point, inset: number) {
+  const [x, y, w, h] = place.bbox!;
+  if (p.x <= x + inset || p.x >= x + w - inset || p.y <= y + inset || p.y >= y + h - inset) return false;
+  const ring = place.rings![0];
+  if (!insideRing(ring, p)) return false;
+  return [-inset, inset].every((dx) => [-inset, inset].every((dy) => insideRing(ring, { x: p.x + dx, y: p.y + dy })));
+}
+
+const areas = plan.places.filter((p) => p.area);
+
+/** Every room, field or garden a walking segment passes through (sampled every 2px, 3px inside the outline). */
 function roomsCrossed(a: Point, b: Point) {
   const n = Math.max(2, Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) / 2));
   const hit = new Set<string>();
   for (let i = 0; i <= n; i += 1) {
     const p = { x: a.x + ((b.x - a.x) * i) / n, y: a.y + ((b.y - a.y) * i) / n };
     for (const room of plan.rooms) if (insideRoom(room, p, 3)) hit.add(room.id);
+    for (const place of areas) if (insideArea(place, p, 3)) hit.add(place.id);
   }
   return hit;
 }
@@ -58,16 +80,35 @@ describe("VJTI ground floor plan data", () => {
   });
 
   it("starts every gate's walk on the ground just inside its marker", () => {
+    const { width, height } = plan.floor;
     for (const g of plan.gates) {
       const [x, y, w, h] = g.bbox;
       const [nx, ny] = plan.nav.nodes[g.node];
-      const outside = Math.max(x - nx, nx - (x + w), y - ny, ny - (y + h));
-      expect(outside, g.id).toBeGreaterThan(0);
+      // Gates sit on the campus boundary along their long side; inside is the
+      // long side facing away from the nearer edge of the map.
+      const beyond = w >= h
+        ? (y < height - (y + h) ? ny - (y + h) : y - ny)
+        : (x < width - (x + w) ? nx - (x + w) : x - nx);
+      expect(beyond, g.id).toBeGreaterThan(0);
       // Clearance from the marker plus its outline (thicker where the source tile was upsampled).
-      expect(outside, g.id).toBeLessThanOrEqual(plan.nav.clearance + 6);
+      expect(beyond, g.id).toBeLessThanOrEqual(plan.nav.clearance + 6);
     }
     // The tall Gate 5 marker carries its label rotated, as in the source.
     expect(plan.gates.find((g) => g.id === "gate-5")!.label.rotate).toBe(90);
+  });
+
+  it("draws fields and gardens as their real outlines", () => {
+    for (const place of areas) {
+      expect(place.rings?.[0]?.length, place.id).toBeGreaterThanOrEqual(4);
+    }
+    // The Cricket Ground's east side slants: its outline covers well under its box.
+    const cricket = areas.find((p) => p.id === "cricket-ground")!;
+    const ring = cricket.rings![0];
+    const area = Math.abs(ring.reduce((sum, [x, y], i) => {
+      const [x2, y2] = ring[(i + 1) % ring.length];
+      return sum + x * y2 - x2 * y;
+    }, 0)) / 2;
+    expect(area / (cricket.bbox![2] * cricket.bbox![3])).toBeLessThan(0.95);
   });
 
   it("matches the size of the stitched image it was drawn from", () => {
@@ -101,18 +142,32 @@ describe("routes on the VJTI ground floor", () => {
     ...rooms.flatMap((r, i) => rooms.filter((_, j) => (i * 7 + j * 3) % 11 === 0 && j !== i).map((o) => [r.id, o.id] as [string, string])),
   ];
 
-  it("never walks through a room it hasn't entered by a door", () => {
+  it("never walks through a room or field it hasn't entered by a door", () => {
     for (const [from, to] of journeys) {
       const route = planRoute(plan, byId(from), byId(to))!;
       expect(route, `${from} -> ${to}`).not.toBeNull();
       const kinds = route.nodes.map((n) => plan.nav.nodes[n][2]);
-      const entered = new Set(route.nodes.filter((_, i) => kinds[i] === "room").map((n) => plan.nav.nodes[n][3]));
+      const inside = (k: string) => k === "room" || k === "place";
+      const entered = new Set(route.nodes.filter((_, i) => inside(kinds[i])).map((n) => plan.nav.nodes[n][3]));
       for (let i = 0; i < route.points.length - 1; i += 1) {
-        // Hops between a room's centre and its doorway are inside that room by design.
-        if (kinds[i] === "room" || kinds[i + 1] === "room") continue;
+        // Hops between a room's (or field's) centre and its doorway are inside it by design.
+        if (inside(kinds[i]) || inside(kinds[i + 1])) continue;
         for (const room of roomsCrossed(route.points[i], route.points[i + 1])) {
           expect(entered.has(room), `${from} -> ${to} crosses ${room}`).toBe(true);
         }
+      }
+    }
+  });
+
+  it("never passes through a field, a garden or a block with no drawn door", () => {
+    const sealed = new Set([...plan.rooms.filter((r) => r.inferredEntrances?.length).map((r) => r.id), ...areas.map((p) => p.id)]);
+    const extra: [string, string][] = [["gate-5", "canteen"], ["mechanical-gate", "gate-5"], ["main-gate", "gate-5"], ["main-gate", "cricket-ground"], ["gate-3", "vjti-hostels"]];
+    for (const [from, to] of [...journeys, ...extra]) {
+      const route = planRoute(plan, byId(from), byId(to))!;
+      expect(route, `${from} -> ${to}`).not.toBeNull();
+      const middle = route.nodes.slice(1, -1).map((n) => plan.nav.nodes[n]);
+      for (const [, , kind, ref] of middle) {
+        expect(kind === "room" || kind === "place" ? sealed.has(ref ?? "") : false, `${from} -> ${to} passes through ${ref}`).toBe(false);
       }
     }
   });

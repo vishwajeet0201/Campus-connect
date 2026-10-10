@@ -1,4 +1,4 @@
-import type { FloorPlan, PlaceCategory, Point } from "./types";
+import type { FloorPlan, PlaceCategory, PlanRoom, Point } from "./types";
 
 /** Anything a student can start from or walk to on a floor. */
 export type Destination = {
@@ -34,7 +34,13 @@ export type PlanRoute = {
 const TURN = 35; // degrees below which a bend reads as "continue"
 const SHARP = 135;
 
-type Graph = { adj: [number, number][][]; edge: Map<number, [number, number]>; key: (a: number, b: number) => number };
+type Graph = {
+  adj: [number, number][][];
+  edge: Map<number, [number, number]>;
+  key: (a: number, b: number) => number;
+  /** Nodes a route may start or end at but never pass through. */
+  endOnly: Uint8Array;
+};
 
 const graphs = new WeakMap<FloorPlan, Graph>();
 
@@ -50,7 +56,17 @@ function graphOf(plan: FloorPlan): Graph {
     adj[b].push([a, w]);
     edge.set(key(a, b), [outside, open]);
   }
-  const graph = { adj, edge, key };
+  // A field, a garden or a block with no drawn door is reached by entrances the
+  // plan infers; crossing one between two of them would be a guess.
+  const sealed = new Set([
+    ...plan.rooms.filter((r) => r.inferredEntrances?.length).map((r) => r.id),
+    ...plan.places.filter((p) => p.area).map((p) => p.id),
+  ]);
+  const endOnly = new Uint8Array(n);
+  plan.nav.nodes.forEach(([, , kind, ref], i) => {
+    if ((kind === "room" || kind === "place") && ref && sealed.has(ref)) endOnly[i] = 1;
+  });
+  const graph = { adj, edge, key, endOnly };
   graphs.set(plan, graph);
   return graph;
 }
@@ -59,7 +75,7 @@ const pointOf = (plan: FloorPlan, node: number): Point => ({ x: plan.nav.nodes[n
 
 /** Dijkstra over the floor's navigation graph (binary heap). */
 export function shortestPath(plan: FloorPlan, from: number, to: number): { nodes: number[]; cost: number } | null {
-  const { adj } = graphOf(plan);
+  const { adj, endOnly } = graphOf(plan);
   const dist = new Float64Array(adj.length).fill(Infinity);
   const prev = new Int32Array(adj.length).fill(-1);
   const heap: [number, number][] = [[0, from]];
@@ -97,6 +113,7 @@ export function shortestPath(plan: FloorPlan, from: number, to: number): { nodes
     const [d, u] = pop();
     if (d > dist[u]) continue;
     if (u === to) break;
+    if (endOnly[u] && u !== from) continue;
     for (const [v, w] of adj[u]) {
       const nd = d + w;
       if (nd < dist[v]) {
@@ -113,6 +130,32 @@ export function shortestPath(plan: FloorPlan, from: number, to: number): { nodes
 }
 
 const dist = (a: Point, b: Point) => Math.hypot(a.x - b.x, a.y - b.y);
+
+/** Distance from p to segment ab. */
+function toSegment(p: Point, a: Point, b: Point) {
+  const vx = b.x - a.x;
+  const vy = b.y - a.y;
+  const t = Math.max(0, Math.min(1, ((p.x - a.x) * vx + (p.y - a.y) * vy) / (vx * vx + vy * vy || 1)));
+  return Math.hypot(p.x - (a.x + t * vx), p.y - (a.y + t * vy));
+}
+
+/** Distance from p to a room's drawn outline (0 inside). Stepped and slanted
+ * rooms use their polygon, not their bounding box. */
+export function distanceToRoom(room: PlanRoom, p: Point) {
+  const [x, y, w, h] = room.bbox;
+  const boxGap = Math.hypot(Math.max(x - p.x, 0, p.x - (x + w)), Math.max(y - p.y, 0, p.y - (y + h)));
+  if (room.shape.type === "rect") return boxGap;
+  const pts = room.shape.points.map(([px, py]) => ({ x: px, y: py }));
+  let inside = false;
+  let best = Infinity;
+  for (let i = 0, j = pts.length - 1; i < pts.length; j = i++) {
+    const a = pts[i];
+    const b = pts[j];
+    if (a.y > p.y !== b.y > p.y && p.x < ((b.x - a.x) * (p.y - a.y)) / (b.y - a.y) + a.x) inside = !inside;
+    best = Math.min(best, toSegment(p, a, b));
+  }
+  return inside ? 0 : best;
+}
 
 /** How a place is referred to mid-sentence ("the cabin of Dr. N. M. Singh"). */
 export function spokenName(d: Pick<Destination, "name" | "category">) {
@@ -144,6 +187,16 @@ export function destinations(plan: FloorPlan): Destination[] {
     Math.max(0, a[1] - (b[1] + b[3]), b[1] - (a[1] + a[3])),
   );
   const boxOf = (id: string) => plan.rooms.find((r) => r.id === id)?.bbox;
+  // Gap from a box to another room's outline: corners of the box against the
+  // outline, and the outline's vertices against the box.
+  const gapTo = (box: [number, number, number, number], room: PlanRoom) => {
+    if (room.shape.type === "rect") return gap(box, room.bbox);
+    const [x, y, w, h] = box;
+    const corners = [{ x, y }, { x: x + w, y }, { x, y: y + h }, { x: x + w, y: y + h }];
+    const fromBox = Math.min(...corners.map((c) => distanceToRoom(room, c)));
+    const fromOutline = Math.min(...room.shape.points.map(([px, py]) => Math.hypot(Math.max(x - px, 0, px - (x + w)), Math.max(y - py, 0, py - (y + h)))));
+    return Math.min(fromBox, fromOutline);
+  };
   const byName = new Map<string, Destination[]>();
   for (const d of list) byName.set(d.name, [...(byName.get(d.name) ?? []), d]);
   for (const group of byName.values()) {
@@ -153,7 +206,7 @@ export function destinations(plan: FloorPlan): Destination[] {
       if (!own) continue;
       const near = plan.rooms
         .filter((r) => r.name && r.name !== d.name && r.category !== "faculty")
-        .map((r) => ({ r, score: gap(own, r.bbox) - Math.min(r.bbox[2] * r.bbox[3], 60_000) / 4_000 }))
+        .map((r) => ({ r, score: gapTo(own, r) - Math.min(r.bbox[2] * r.bbox[3], 60_000) / 4_000 }))
         .sort((a, b) => a.score - b.score)[0]?.r;
       if (near) d.label = `${d.name} (near ${near.name})`;
     }
@@ -193,10 +246,7 @@ function landmark(plan: FloorPlan, p: Point, exclude: Set<string>, radius = 140)
   let best: { name: string; d: number } | null = null;
   for (const room of plan.rooms) {
     if (!room.name || exclude.has(room.id)) continue;
-    const [x, y, w, h] = room.bbox;
-    const dx = Math.max(x - p.x, 0, p.x - (x + w));
-    const dy = Math.max(y - p.y, 0, p.y - (y + h));
-    const d = Math.hypot(dx, dy);
+    const d = distanceToRoom(room, p);
     if (d <= radius && (!best || d < best.d)) best = { name: room.name, d };
   }
   return best?.name;
